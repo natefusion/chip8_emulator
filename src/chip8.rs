@@ -2,7 +2,6 @@ use rand::Rng;
 pub struct Chip8 {
 	/* Materials:
 	 * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
-	 * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
 	 * https://github.com/mattmikolay/chip-8/wiki/CHIP%E2%80%908-Technical-Reference
      * http://mattmik.com/files/chip8/mastering/chip8.html
 	 *
@@ -89,15 +88,14 @@ impl Chip8 {
 		self.opcode = self.memory[self.pc] << 8 | self.memory[self.pc+1];
 
 		// Decode opcode
-		// Reads first 4 bits of the opcode
+		// Reads first 4 bits of the opcode (highest 4 bits)
 		match self.opcode & 0xF000 {
 			0x0000 => {
-				// Some opcodes need the last four bits to be read
+				// Some opcodes need the last four bits to be read (lowest 4 bits)
 				match self.opcode & 0x000F {
 					// 00E0: Clears the screen
-					0x0000 => {
-						for a in 0..self.gfx.iter_mut() { *a = 0; }
-					}
+					0x0000 => for a in 0..self.gfx.iter_mut() { *a = 0; }
+
 					// 00EE: Returns from the subroutine
 					0x000E => {
 						// I don't know where the 'top' of the stack is, so I'll assume it's at the end
@@ -120,16 +118,15 @@ impl Chip8 {
 			}
 			
 			// 3xkk: Skip next instruction if vx == kk
-			// Double check kk (make sure all match if changed)
 			0x3000 => {
-				if self.v[(self.opcode & 0x0F00) >> 8] == self.opcode & 0x0F00 {
+				if self.v[(self.opcode & 0x0F00) >> 8] == self.opcode & 0x00FF {
 					self.pc += 2;
 				}
 			}
 			
 			// 4xkk: Skip next instruction if vx != kk
 			0x4000 => {
-				if self.v[(self.opcode & 0x0F00) >> 8] != self.opcode & 0x0F00 {
+				if self.v[(self.opcode & 0x0F00) >> 8] != self.opcode & 0x00FF {
 					self.pc += 2;
 				}
 			}
@@ -142,12 +139,12 @@ impl Chip8 {
 			}
 			
 			// 6xkk: Set vx = kk
-			0x6000 => self.v[self.opcode & 0x0F00) >> 8] = self.opcode & 0x0F00;
+			0x6000 => self.v[self.opcode & 0x0F00) >> 8] = self.opcode & 0x00FF;
 			
 			// 7xkk: Set vx = vx + kk
 			0x7000 => {
 				self.v[(self.opcode & 0x0F00) >> 8] =
-					self.v[(self.opcode & 0x0F00) >> 8] + self.opcode & 0x0F00;
+					self.v[(self.opcode & 0x0F00) >> 8] + self.opcode & 0x00FF;
 			}
 			
 			0x8000 => {
@@ -196,7 +193,7 @@ impl Chip8 {
 					// 8xy6: Set vx = vx SHR 1
 					0x0006 => {
 						// If LSB is equal to 1
-						if self.v[(self.opcode & 0x0F00) >> 8] & 0x00FF == 1 {
+						if (self.v[(self.opcode & 0x0F00) >> 8] & 0x000F) >> 3 == 1 {
 							self.v[0xF] = 1;
 						} else {
 							self.v[0xF] = 0;
@@ -218,7 +215,7 @@ impl Chip8 {
 					// 8xye: Set vx = vx SHL 1
 					0x000e => {
 						//if MSB is equal to 1
-						if self.v[(self.opcode & 0x0F00) >> 8] & 0xFF00 == 1 {
+						if (self.v[(self.opcode & 0x0F00) >> 8] & 0xF000) >> 15 == 1 {
 							self.v[0xF] = 1;
 						} else {
 							self.v[0xF] = 0;
@@ -243,29 +240,76 @@ impl Chip8 {
 			}
 			
 			// BNNN: Jump to location NNN + v0
-			0xB000 => self.pc = (opcode & 0x0FFF) + v[0x0];
+			0xB000 => self.pc = (opcode & 0x0FFF) + v[0];
 			
 			// cxkk: Set vx = random byte AND kk
 			0xC000 => {
 				self.v[(self.opcode & 0x0F00) >> 8] = 
-					rand::thread_rng().gen_range(0,255) & self.opcode & 0x0F00;
+					rand::thread_rng().gen_range(0,255) & self.opcode & 0x00FF;
 			}
 			
 			// dxyn: Display n-byte sprite starting at memory location 'i' at (vx, vy), set vf = collision
-			0xD000 => {
-			}
+            // Looks hard
+			0xD000 => {}
+
+            0xE000 => {
+                match self.opcode & 0x00FF {
+                    // ex9e: Skip next instruction if key with the value of vx is pressed
+                    // Double check
+                    0x009E => {
+                        if self.key[self.v[(self.opcode 7 0x0F00) >> 8]] == 1 {
+                            self.pc += 2;
+                        }
+                    }
+
+                    // exa1: Skip next instruction if key with the value of vx is not pressed
+                    // Double check
+                    0x00A1 => {
+                        if self.key[self.v[(self.opcode & 0x0F00) >> 8]] == 0 {
+                            self.pc += 2;
+                        }
+                    }
+                }
+            }
 			
 			0xF000 => {
-				// This might be wrong, double check
 				match opcode & 0x00FF {
-					// FX33: Store the binary-coded decimal equivalent of the value
-					// stored in register vX at address i, i+1, and i+2
+                    // fx07: Set vx = delay timer value
+                    0x0007 => self.v[(self.opcode & 0x0F00) >> 8] = self.delay_timer;
+
+                    // fx0a: Wait for a key press, store the value of the key in vx
+                    // Looks hard
+                    0x000A => {}
+
+                    // fx15: Set delay timer = vx
+                    0x0015 => self.delay_timer = self.v[(self.opcode & 0x0F00) >> 8];
+
+                    // fx18: Set sound timer = vx
+                    0x0018 => self.sound_timer = self.v[(self.opcode & 0x0F00) >> 8];
+
+                    // fx1e: Set i = i + vx
+                    0x001E => self.i += self.v[(self.opcode & 0x0F00) >> 8];
+
+                    // fx29: Set i = location of sprite for digit vx
+                    // This looks hard, I'll do it later
+                    0x0029 => {}
+
+					// fx33: Store the binary-coded decimal equivalent of the value
+					// stored in register vx at address i, i+1, and i+2
 					0x0033 => {
 						self.memory[self.i]   = self.v[(self.opcode & 0x0F00) >> 8] / 100;
 						self.memory[self.i+1] = (self.v[(self.opcode & 0x0F00) >> 8] / 10) % 10;
 						self.memory[self.i+2] = (self.v[(self.opcode & 0x0F00) >> 8] % 100) % 10;
 						pc += 2;
 					}
+
+                    // fx55: Store registers v0 through vx in memory starting at location i
+                    // Looks hard
+                    0x0055 => {}
+
+                    // fx65: Read registers V0 through Vx from memory starting at location i
+                    // Looks hard
+                    0x0065 => {}
 					_ => println!("Unknown opcode: 0x{:x}",self.opcode);
 				}
 			}
