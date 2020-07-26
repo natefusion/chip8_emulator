@@ -1,12 +1,12 @@
 use rand::Rng;
 pub struct Chip8 {
-	/* Materials
+	/* Materials:
 	 * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
 	 * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
 	 * https://github.com/mattmikolay/chip-8/wiki/CHIP%E2%80%908-Technical-Reference
      * http://mattmik.com/files/chip8/mastering/chip8.html
 	 *
-	 *System memory map:
+	 * System memory map:
 	 * 0x000-0x1FF - Chip 8 interpreter (contains font set in emu)
 	 * 0x050-0x0A0 - Used for the builtin 4x5 pixel font set (0-F)
 	 * 0x200-0xFFF - Program ROM and work RAM
