@@ -33,7 +33,7 @@ pub struct Chip8 {
 	sp: u16,
 	// Load hex based keypad (0x0-0xF)
 	key: [u8;16],
-		
+
 	// Creates the fontset, there are 16 total characters
 	fontset: [u8;80],
 
@@ -51,7 +51,7 @@ impl Chip8 {
 			stack:  [0;16],      // Clear stack
 			v:      [0;16],      // Clear registers v0-vF
 			memory: [0;4096],    // Clear memory
-			
+
 			delay_timer: 0,      // Reset delay timer
 			sound_timer: 0,      // Reset sound timer
 			key: [0;16],
@@ -94,7 +94,7 @@ impl Chip8 {
 				// Some opcodes need the last four bits to be read (lowest 4 bits)
 				match self.opcode & 0x000F {
 					// 00E0: Clears the screen
-					0x0000 => for a in 0..self.gfx.iter_mut() { *a = 0; }
+					0x0000 => for a in self.gfx.iter_mut() { *a = 0; }
 
 					// 00EE: Returns from the subroutine
 					0x000E => {
@@ -103,17 +103,17 @@ impl Chip8 {
 						self.pc = top;
 						self.sp -= 1;
 					}
-					_ => println("Unknown opcode [0x0000]: 0x{:x}",self.opcode);
+					_ => println!("Unknown opcode [0x0000]: 0x{:x}",self.opcode),
 				}
 			}
 			
 			// 1NNN: Jump to location NNN
-			0x1000 => self.pc = self.opcode & 0x0FFF;
+			0x1000 => self.pc = self.opcode & 0x0FFF,
 
 			// 2NNN: Execute subroutine starting at NNN
 			0x2000 => {
 				self.stack[self.sp] = self.pc;
-				sp += 1;
+				self.sp += 1;
 				self.pc = self.opcode & 0x0FFF;
 			}
 			
@@ -133,24 +133,21 @@ impl Chip8 {
 			
 			// 5xy0: Skip next instruction if vx == vy
 			0x5000 => {
-				if self.v[(self.opcode & 0x0F00) >> 8] == self.v[self.opcode & 0x00F0) >> 4] {
-					pc += 2;
+				if self.v[(self.opcode & 0x0F00) >> 8] == self.v[(self.opcode & 0x00F0) >> 4] {
+					self.pc += 2;
 				}
 			}
 			
 			// 6xkk: Set vx = kk
-			0x6000 => self.v[self.opcode & 0x0F00) >> 8] = self.opcode & 0x00FF;
+			0x6000 => self.v[(self.opcode & 0x0F00) >> 8] = self.opcode & 0x00FF,
 			
 			// 7xkk: Set vx = vx + kk
-			0x7000 => {
-				self.v[(self.opcode & 0x0F00) >> 8] =
-					self.v[(self.opcode & 0x0F00) >> 8] + self.opcode & 0x00FF;
-			}
+			0x7000 => self.v[(self.opcode & 0x0F00) >> 8] += self.opcode & 0x00FF,
 			
 			0x8000 => {
 				match self.opcode & 0x000F {
 					// 8xy0: Set vx = vy
-					0x0000 => self.v[(self.opcode & 0x0F00) >> 8] = self.v[(self.opcode & 0x00F0) >> 4];
+					0x0000 => self.v[(self.opcode & 0x0F00) >> 8] = self.v[(self.opcode & 0x00F0) >> 4],
 					
 					// 8xy1: Set vx = vx | vy
 					0x0001 => {
@@ -172,13 +169,14 @@ impl Chip8 {
 					
 					// 8xy4: Adds the value of register vy to register vx
 					0x0004 => {
-						if self.v[(self.opcode & 0x00F0) >> 4] > (0xFF - self.v[(self.opcode & 0x0F00) >> 8)] {
+						if self.v[(self.opcode & 0x00F0) >> 4] > (0xFF - self.v[(self.opcode & 0x0F00) >> 8]) {
 							self.v[0xF] = 1; // carry
 						} else {
 							self.v[0xF] = 0;
 						}
 						self.v[(self.opcode & 0x0F00) >> 8] += self.v[(self.opcode & 0x00F0) >> 4];
-						pc += 2;
+						self.pc += 2;
+					}
 						
 					// 8xy5: Set vx = vx - vy, set vf = NOT borrow
 					0x0005 => {
@@ -222,7 +220,7 @@ impl Chip8 {
 						}
 						self.v[(self.opcode & 0x0F00) >> 8] *= 2;
 					}
-					_ => println!("Unknown opcode [0x8000]: 0x{:x}",self.opcode);
+					_ => println!("Unknown opcode [0x8000]: 0x{:x}",self.opcode),
 				}
 			}
 			
@@ -240,7 +238,7 @@ impl Chip8 {
 			}
 			
 			// BNNN: Jump to location NNN + v0
-			0xB000 => self.pc = (opcode & 0x0FFF) + v[0];
+			0xB000 => self.pc = (self.opcode & 0x0FFF) + self.v[0],
 			
 			// cxkk: Set vx = random byte AND kk
 			0xC000 => {
@@ -250,14 +248,16 @@ impl Chip8 {
 			
 			// dxyn: Display n-byte sprite starting at memory location 'i' at (vx, vy), set vf = collision
             // Looks hard
-			0xD000 => {}
+			//0xD000 => {
+
+            //}
 
             0xE000 => {
                 match self.opcode & 0x00FF {
                     // ex9e: Skip next instruction if key with the value of vx is pressed
                     // Double check
                     0x009E => {
-                        if self.key[self.v[(self.opcode 7 0x0F00) >> 8]] == 1 {
+                        if self.key[self.v[(self.opcode & 0x0F00) >> 8]] == 1 {
                             self.pc += 2;
                         }
                     }
@@ -273,26 +273,36 @@ impl Chip8 {
             }
 			
 			0xF000 => {
-				match opcode & 0x00FF {
+				match self.opcode & 0x00FF {
                     // fx07: Set vx = delay timer value
-                    0x0007 => self.v[(self.opcode & 0x0F00) >> 8] = self.delay_timer;
+                    0x0007 => self.v[(self.opcode & 0x0F00) >> 8] = self.delay_timer,
 
                     // fx0a: Wait for a key press, store the value of the key in vx
-                    // Looks hard
-                    0x000A => {}
+                    // Double check
+                    0x000A => {
+                        let mut key_pressed = 0;
+                        while key_pressed == 0 {
+                            for (a, val) in self.key.iter().enumerate() {
+                                if val == 1 {
+                                    key_pressed = 1;
+                                    self.v[(self.opcode & 0x0F00) >> 8] = a;
+                                }
+                            }
+                        }
+                    }
 
                     // fx15: Set delay timer = vx
-                    0x0015 => self.delay_timer = self.v[(self.opcode & 0x0F00) >> 8];
+                    0x0015 => self.delay_timer = self.v[(self.opcode & 0x0F00) >> 8],
 
                     // fx18: Set sound timer = vx
-                    0x0018 => self.sound_timer = self.v[(self.opcode & 0x0F00) >> 8];
+                    0x0018 => self.sound_timer = self.v[(self.opcode & 0x0F00) >> 8],
 
                     // fx1e: Set i = i + vx
-                    0x001E => self.i += self.v[(self.opcode & 0x0F00) >> 8];
+                    0x001E => self.i += self.v[(self.opcode & 0x0F00) >> 8],
 
                     // fx29: Set i = location of sprite for digit vx
-                    // This looks hard, I'll do it later
-                    0x0029 => {}
+                    // Double check
+                    0x0029 => self.i = self.v[(self.opcode & 0x0F00) >> 8],
 
 					// fx33: Store the binary-coded decimal equivalent of the value
 					// stored in register vx at address i, i+1, and i+2
@@ -300,29 +310,38 @@ impl Chip8 {
 						self.memory[self.i]   = self.v[(self.opcode & 0x0F00) >> 8] / 100;
 						self.memory[self.i+1] = (self.v[(self.opcode & 0x0F00) >> 8] / 10) % 10;
 						self.memory[self.i+2] = (self.v[(self.opcode & 0x0F00) >> 8] % 100) % 10;
-						pc += 2;
+						self.pc += 2;
 					}
 
                     // fx55: Store registers v0 through vx in memory starting at location i
-                    // Looks hard
-                    0x0055 => {}
+                    // Double check 
+                    0x0055 => {
+                        // I think this is right (x refers to 0-F)
+                        // Just keep an eye on this and fx65
+                        for (a, val) in self.v.iter().enumerate() {
+                            self.memory[self.i+a] = val;
+                        }
+                    }
 
                     // fx65: Read registers V0 through Vx from memory starting at location i
-                    // Looks hard
-                    0x0065 => {}
-					_ => println!("Unknown opcode: 0x{:x}",self.opcode);
+                    // Double check
+                    0x0065 => {
+                        for (a, val) in self.v.iter_mut().enumerate() {
+                            *val = self.memory[self.i+a];
+                        }
+                    }
+					_ => println!("Unknown opcode: 0x{:x}",self.opcode),
 				}
 			}
 		}
-
 		// Update timers
 		if self.delay_timer > 0 {
-			delay_timer -= 1;
+			self.delay_timer -= 1;
 		}
 
 		if self.sound_timer > 0 {
-			if sound_timer == 1 { println!("BEEP!"); }
-			sound_timer -= 1;
+			if self.sound_timer == 1 { println!("BEEP!"); }
+			self.sound_timer -= 1;
 		}
 	}
 
