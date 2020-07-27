@@ -3,7 +3,8 @@ pub struct Chip8 {
 	/* Materials:
 	 * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
 	 * https://github.com/mattmikolay/chip-8/wiki/CHIP%E2%80%908-Technical-Reference
-     * http://mattmik.com/files/chip8/mastering/chip8.html
+	 * http://mattmik.com/files/chip8/mastering/chip8.html
+	 * http://www.multigesture.net/articles/how-to-write-an-emulator-chip-8-interpreter/
 	 *
 	 * System memory map:
 	 * 0x000-0x1FF - Chip 8 interpreter (contains font set in emu)
@@ -37,6 +38,8 @@ pub struct Chip8 {
 	// Creates the fontset, there are 16 total characters
 	fontset: [u8;80],
 
+	// If true, redraw the screen
+	draw_flag: bool,
 }
 
 impl Chip8 {
@@ -74,6 +77,8 @@ impl Chip8 {
 				0xF0, 0x80, 0xF0, 0x80, 0xF0,  // E
 				0xF0, 0x80, 0xF0, 0x80, 0x80]  // F
 			},
+
+			draw_flag: false,    // Reset redraw flag
 		};
 
 		// fontset is stored from 0x000 to 0x1FF in memory
@@ -106,7 +111,7 @@ impl Chip8 {
 					_ => println!("Unknown opcode [0x0000]: 0x{:x}",self.opcode),
 				}
 			}
-			
+
 			// 1NNN: Jump to location NNN
 			0x1000 => self.pc = self.opcode & 0x0FFF,
 
@@ -116,34 +121,40 @@ impl Chip8 {
 				self.sp += 1;
 				self.pc = self.opcode & 0x0FFF;
 			}
-			
+
 			// 3xkk: Skip next instruction if vx == kk
 			0x3000 => {
 				if self.v[((self.opcode & 0x0F00) >> 8) as usize] == (self.opcode & 0x00FF) as u8 {
+					self.pc += 4;
+				} else {
 					self.pc += 2;
 				}
 			}
-			
+
 			// 4xkk: Skip next instruction if vx != kk
 			0x4000 => {
 				if self.v[((self.opcode & 0x0F00) >> 8) as usize] != (self.opcode & 0x00FF) as u8 {
+					self.pc += 4;
+				} else {
 					self.pc += 2;
 				}
 			}
-			
+
 			// 5xy0: Skip next instruction if vx == vy
 			0x5000 => {
 				if self.v[((self.opcode & 0x0F00) >> 8) as usize] == self.v[((self.opcode & 0x00F0) >> 4) as usize] {
+					self.pc += 4;
+				} else {
 					self.pc += 2;
 				}
 			}
-			
+
 			// 6xkk: Set vx = kk
 			0x6000 => self.v[((self.opcode & 0x0F00) >> 8) as usize] = (self.opcode & 0x00FF) as u8,
 			
 			// 7xkk: Set vx = vx + kk
 			0x7000 => self.v[((self.opcode & 0x0F00) >> 8) as usize] += (self.opcode & 0x00FF) as u8,
-			
+
 			0x8000 => {
 				match self.opcode & 0x000F {
 					// 8xy0: Set vx = vy
@@ -154,19 +165,19 @@ impl Chip8 {
 						self.v[((self.opcode & 0x0F00) >> 8) as usize] =
 							self.v[((self.opcode & 0x0F00) >> 8) as usize] | self.v[((self.opcode & 0x00F0) >> 4) as usize];
 					}
-					
+
 					// 8xy2: Set vx = vx & vy
 					0x0002 => {
 						self.v[((self.opcode & 0x0F00) >> 8) as usize] =
 							self.v[((self.opcode & 0x0F00) >> 8) as usize] & self.v[((self.opcode & 0x00F0) >> 4) as usize];
 					}
-					
+
 					// 8xy3: set vx = xv ^ xy
 					0x0003 => {
 						self.v[((self.opcode & 0x0F00) >> 8) as usize] =
 							self.v[((self.opcode & 0x0F00) >> 8) as usize] ^ self.v[((self.opcode & 0x00F0) >> 4) as usize];
 					}
-					
+
 					// 8xy4: Adds the value of register vy to register vx
 					0x0004 => {
 						if self.v[((self.opcode & 0x00F0) >> 4) as usize] > (0xFF - self.v[((self.opcode & 0x0F00) >> 8) as usize]) {
@@ -177,7 +188,7 @@ impl Chip8 {
 						self.v[((self.opcode & 0x0F00) >> 8) as usize] += self.v[((self.opcode & 0x00F0) >> 4) as usize];
 						self.pc += 2;
 					}
-						
+
 					// 8xy5: Set vx = vx - vy, set vf = NOT borrow
 					0x0005 => {
 						if self.v[((self.opcode & 0x0F00) >> 8) as usize] > self.v[((self.opcode & 0x00F0) >> 4) as usize] {
@@ -187,7 +198,7 @@ impl Chip8 {
 						}
 						self.v[((self.opcode & 0x0F00) >> 8) as usize] -= self.v[((self.opcode & 0x0F00) >> 8) as usize];
 					}
-					
+
 					// 8xy6: Set vx = vx SHR 1
 					0x0006 => {
 						// If LSB is equal to 1
@@ -198,7 +209,7 @@ impl Chip8 {
 						}
 						self.v[((self.opcode & 0x0F00) >> 8) as usize] /= 2;
 					}
-					
+
 					// 8xy7: Set vx = vy - vx, set vf = NOT borrow
 					0x0007 => {
 						if self.v[((self.opcode & 0x00F0) >> 4) as usize] > self.v[((self.opcode & 0x0F00) >> 8) as usize] {
@@ -209,7 +220,7 @@ impl Chip8 {
 						self.v[((self.opcode & 0x0F00) >> 8) as usize] =
 							self.v[((self.opcode & 0x00F0) >> 4) as usize] - self.v[((self.opcode & 0x0F00) >> 8) as usize];
 					}
-					
+
 					// 8xye: Set vx = vx SHL 1
 					0x000e => {
 						//if MSB is equal to 1
@@ -223,10 +234,12 @@ impl Chip8 {
 					_ => println!("Unknown opcode [0x8000]: 0x{:x}",self.opcode),
 				}
 			}
-			
+
 			// Skip next instruction if vx != vy
 			0x9000 => {
 				if self.v[((self.opcode & 0x0F00) >> 8) as usize] != self.v[((self.opcode & 0x00F0) >> 4) as usize] {
+					self.pc += 4;
+				} else {
 					self.pc += 2;
 				}
 			}
@@ -236,7 +249,7 @@ impl Chip8 {
 				self.i = self.opcode & 0x0FFF;
 				self.pc += 2;
 			}
-			
+
 			// BNNN: Jump to location NNN + v0
 			0xB000 => self.pc = (self.opcode & 0x0FFF) + (self.v[0]) as u16,
 			
@@ -245,34 +258,54 @@ impl Chip8 {
 				self.v[((self.opcode & 0x0F00) >> 8) as usize] = 
 					rand::thread_rng().gen_range(0,255) & (self.opcode & 0x00FF) as u8;
 			}
-			
-			// dxyn: Display n-byte sprite starting at memory location 'i' at (vx, vy), set vf = collision
-			// Looks hard
-			//0xD000 => {
 
-			//}
+			// dxyn: Display n-byte sprite starting at memory location 'i' at (vx, vy), set vf = collision
+			0xD000 => {
+				let x: u16 = (self.v[((self.opcode & 0x0F00) >> 8) as usize]) as u16;
+				let y: u16 = (self.v[((self.opcode & 0x00F0) >> 4) as usize]) as u16;
+				let height: u16 = self.opcode & 0x000F;
+				let mut pixel: u16;
+
+				self.v[0xF] = 0;
+				for yline in 0..height {
+					pixel = self.memory[(self.i + yline) as usize] as u16;
+					for xline in 0..8 {
+						if pixel & (0x80 >> xline) != 0 {
+							if self.gfx[(x+xline+((y+yline)*64)) as usize] == 1 {
+								self.v[0xF] = 1;
+							}
+							self.gfx[(x+xline+((y+yline) * 64)) as usize] ^= 1;
+						}
+					}
+				}
+
+				self.draw_flag = true;
+				self.pc += 2;
+			}
 
 			0xE000 => {
 				match self.opcode & 0x00FF {
 					// ex9e: Skip next instruction if key with the value of vx is pressed
-					// Double check
 					0x009E => {
-						if self.key[(self.v[((self.opcode & 0x0F00) >> 8) as usize]) as usize] == 1 {
+						if self.key[(self.v[((self.opcode & 0x0F00) >> 8) as usize]) as usize] != 0 {
+							self.pc += 4;
+						} else {
 							self.pc += 2;
 						}
 					}
 
 					// exa1: Skip next instruction if key with the value of vx is not pressed
-					// Double check
 					0x00A1 => {
 						if self.key[(self.v[((self.opcode & 0x0F00) >> 8) as usize]) as usize] == 0 {
+							self.pc += 4;
+						} else {
 							self.pc += 2;
 						}
 					}
 					_ => println!("Unknown opcode [0xE000]: 0x{:x}",self.opcode),
 				}
 			}
-			
+
 			0xF000 => {
 				match self.opcode & 0x00FF {
 					// fx07: Set vx = delay timer value
@@ -294,16 +327,16 @@ impl Chip8 {
 
 					// fx15: Set delay timer = vx
 					0x0015 => self.delay_timer = self.v[((self.opcode & 0x0F00) >> 8) as usize],
-
+					
 					// fx18: Set sound timer = vx
 					0x0018 => self.sound_timer = self.v[((self.opcode & 0x0F00) >> 8) as usize],
 					// fx1e: Set i = i + vx
 					0x001E => self.i += (self.v[((self.opcode & 0x0F00) >> 8) as usize]) as u16,
-
+					
 					// fx29: Set i = location of sprite for digit vx
 					// Double check
 					0x0029 => self.i = (self.v[((self.opcode & 0x0F00) >> 8) as usize]) as u16,
-
+					
 					// fx33: Store the binary-coded decimal equivalent of the value
 					// stored in register vx at address i, i+1, and i+2
 					0x0033 => {
@@ -313,9 +346,9 @@ impl Chip8 {
 						self.pc += 2;
 					}
 
-                    // fx55: Store registers v0 through vx in memory starting at location i
-                    // Double check 
-                    0x0055 => {
+					// fx55: Store registers v0 through vx in memory starting at location i
+					// Double check 
+					0x0055 => {
 						// I think this is right (x refers to 0-F)
 						// Just keep an eye on this and fx65
 						for (a, val) in self.v.iter().enumerate() {
@@ -346,7 +379,8 @@ impl Chip8 {
 		}
 	}
 
-	pub fn load_game(&mut self) {}
-	pub fn draw_flag(&mut self) {}
+	// Load a game from the current directory
+	pub fn load_game(&mut self, game: String) {}
+	// Define key definitions for key[]
 	pub fn set_keys(&mut self) {}
 }
