@@ -39,7 +39,7 @@ pub struct Chip8 {
 	fontset: [u8;80],
 
 	// If true, redraw the screen
-	draw_flag: bool,
+	pub draw_flag: bool,
 }
 
 impl Chip8 {
