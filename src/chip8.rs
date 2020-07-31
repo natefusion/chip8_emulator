@@ -1,4 +1,5 @@
 use rand::Rng;
+use std::File;
 pub struct Chip8 {
 	/* Materials:
 	 * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
@@ -78,7 +79,7 @@ impl Chip8 {
 				0xF0, 0x80, 0xF0, 0x80, 0x80]  // F
 			},
 
-			draw_flag: false,    // Reset redraw flag
+			draw_flag: true,    // Reset redraw flag
 		};
 
 		// fontset is stored from 0x000 to 0x1FF in memory
@@ -374,13 +375,13 @@ impl Chip8 {
 		}
 
 		if self.sound_timer > 0 {
-			if self.sound_timer == 1 { println!("BEEP!"); }
+			if self.sound_timer == 1 { println!("PRETEND THIS IS A SOUND"); }
 			self.sound_timer -= 1;
 		}
 	}
 
 	// Load a game from the current directory
-	pub fn load_game(&mut self, game: String) {}
-	// Define key definitions for key[]
-	pub fn set_keys(&mut self) {}
+	pub fn load_game(&mut self, game: String) {
+		// Copy game data from file to memory[] starting at 0x200
+	}
 }
