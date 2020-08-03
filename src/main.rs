@@ -1,9 +1,10 @@
 use chip8::Chip8;
 mod chip8;
 
-const GAME: &'static str = "TETRIS"; // Games should be in ~/Downloads/c8games
+const GAME: &str = "TETRIS"; // Games should be in ~/Downloads/c8games
 
-fn main() {
+fn main()
+{
 	let my_chip8 = Chip8::initialize();
 
 	// Set up render system and register input callbacks
@@ -14,11 +15,12 @@ fn main() {
 	my_chip8.load_game(GAME);
 
 	// Emulation loop
-	loop {
+	loop
+	{
 		// Emulate one cycle
 		my_chip8.emulate_cycle();
 		
 		// If the draw flag is set, update the screen
-		if my_chip8.draw_flag { screen.draw_frame(my_chip8); }
+		if my_chip8.draw_flag { screen.draw_frame(&my_chip8); }
 	}
 }
