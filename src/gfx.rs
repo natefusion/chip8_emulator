@@ -51,7 +51,7 @@ impl Gfx
 			x += 10;
 		}
 
-	fn handle_events(&mut self, my_chip8: &Chip8) -> return bool
+	fn handle_events(&mut self, my_chip8: &Chip8) -> bool
 	{
 		let mut exit = false;
 		for event in self.event_pump.poll_iter()
