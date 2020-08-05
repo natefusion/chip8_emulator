@@ -12,10 +12,12 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 
 
-const GAME: &str = "/home/nathan/Downloads/c8games/INVADERS";
+const GAME: &str = "/home/nathan/Downloads/c8games/TETRIS";
 
 fn draw_frame(canvas: &mut Canvas<Window>, my_chip8: &Chip8)
 {
+	canvas.set_draw_color(Color::RGB(255,255,255));
+	canvas.clear();
 	canvas.set_draw_color(Color::RGB(0,0,0));
 
 	let mut x: i32 = 0;
@@ -100,22 +102,14 @@ fn main()
 				.build()
 				.unwrap();
 
-	canvas.set_draw_color(Color::RGB(255,255,255));
-	canvas.clear();
-
-
 	my_chip8.load_game(GAME);
 
 	// Emulation loop
 	loop
 	{
-		// Emulate one cycle
 		my_chip8.emulate_cycle();
-		
-		// If the draw flag is set, update the screen
-		if my_chip8.draw_flag { draw_frame(&mut canvas, &my_chip8); }
 		if handle_events(&mut event_pump, &mut my_chip8) { break; }
-
-		std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+		if my_chip8.draw_flag { draw_frame(&mut canvas, &my_chip8); }
+		std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 144));
 	}
 }
