@@ -1,5 +1,7 @@
 use rand::Rng;
-use std::File;
+use std::fs::File;
+use std::io::Read;
+
 pub struct Chip8
 {
 	/* Materials:
@@ -25,7 +27,7 @@ pub struct Chip8
 	i: u16,
 	pc: u16,
 	// For graphics. array of on (1) or off (0) pixels
-	gfx: [u8;64*32],
+	pub gfx: [u8;64*32],
 	// Two timers that count at 60Hz, when set above 0 they count down.
 	delay_timer: u8,
 	sound_timer: u8,
@@ -35,7 +37,7 @@ pub struct Chip8
 	stack: [u16;16],
 	sp: u16,
 	// Load hex based keypad (0x0-0xF)
-	key: [u8;16],
+	pub key: [u8;16],
 
 	// Creates the fontset, there are 16 total characters
 	fontset: [u8;80],
@@ -97,7 +99,9 @@ impl Chip8
 	{
 		// Fetch opcode
 		// Merges two successive bytes from the memory to form an opcode
-		self.opcode = (self.memory[self.pc as usize] << 8 | self.memory[(self.pc+1) as usize]) as u16;
+		let op1: u16 = (self.memory[self.pc as usize]).into(); // I need to convert the memory to u16 first
+		let op2: u16 = (self.memory[(self.pc+1) as usize]).into();
+		self.opcode = op1 << 8 | op2;
 
 		// Decode opcode
 		// Reads first 4 bits of the opcode (highest 4 bits)
@@ -109,7 +113,7 @@ impl Chip8
 				match self.opcode & 0x000F
 				{
 					// 00E0: Clears the screen
-					0x0000 => for a in self.gfx.iter_mut() { *a = 0; }
+					0x0000 => for a in self.gfx.iter_mut() { *a = 0; },
 
 					// 00EE: Returns from the subroutine
 					0x000E =>
@@ -178,25 +182,13 @@ impl Chip8
 					0x0000 => self.v[((self.opcode & 0x0F00) >> 8) as usize] = self.v[((self.opcode & 0x00F0) >> 4) as usize],
 					
 					// 8xy1: Set vx = vx | vy
-					0x0001 =>
-					{
-						self.v[((self.opcode & 0x0F00) >> 8) as usize] =
-							self.v[((self.opcode & 0x0F00) >> 8) as usize] | self.v[((self.opcode & 0x00F0) >> 4) as usize];
-					}
+					0x0001 => self.v[((self.opcode & 0x0F00) >> 8) as usize] |= self.v[((self.opcode & 0x00F0) >> 4) as usize],
 
 					// 8xy2: Set vx = vx & vy
-					0x0002 =>
-					{
-						self.v[((self.opcode & 0x0F00) >> 8) as usize] =
-							self.v[((self.opcode & 0x0F00) >> 8) as usize] & self.v[((self.opcode & 0x00F0) >> 4) as usize];
-					}
+					0x0002 => self.v[((self.opcode & 0x0F00) >> 8) as usize] &= self.v[((self.opcode & 0x00F0) >> 4) as usize],
 
-					// 8xy3: set vx = xv ^ xy
-					0x0003 =>
-					{
-						self.v[((self.opcode & 0x0F00) >> 8) as usize] =
-							self.v[((self.opcode & 0x0F00) >> 8) as usize] ^ self.v[((self.opcode & 0x00F0) >> 4) as usize];
-					}
+					// 8xy3: set vx = vx ^ vy
+					0x0003 => self.v[((self.opcode & 0x0F00) >> 8) as usize] ^= self.v[((self.opcode & 0x00F0) >> 4) as usize],
 
 					// 8xy4: Adds the value of register vy to register vx
 					0x0004 =>
@@ -425,8 +417,23 @@ impl Chip8
 	}
 
 	// Load a game from the current directory
-	pub fn load_game(&mut self, game: String)
+	pub fn load_game(&mut self, game: &str)
 	{
-		// Copy game data from file to memory[] starting at 0x200
+		println!("Loading {}…",game);
+		let mut file = File::open(game).expect("Please enter a valid file");
+		let mut buffer = Vec::new(); // Load game into buffer first
+		file.read_to_end(&mut buffer).expect("Error reading file");
+
+		// 512 == 0x200
+		if 4096 - 512 > buffer.len() {
+			for (i,val) in buffer.iter().enumerate()
+			{
+				self.memory[i+512] = *val;
+			}
+		} else {
+			println!("Error: ROM too big");
+		}
+
+		println!("Loaded {}",game);
 	}
 }
