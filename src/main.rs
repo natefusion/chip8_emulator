@@ -1,7 +1,5 @@
 use std::time::Duration;
 use chip8::Chip8;
-//use gfx::Gfx;
-//mod gfx;
 mod chip8;
 
 use sdl2::pixels::Color;
@@ -12,7 +10,8 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 
 
-const GAME: &str = "/home/nathan/Downloads/c8games/TETRIS";
+const GAME_DIR: &str = "/home/nathan/Downloads/c8games/";
+const GAME_NAME: &str = "KALEID";
 
 fn draw_frame(canvas: &mut Canvas<Window>, my_chip8: &Chip8)
 {
@@ -25,7 +24,7 @@ fn draw_frame(canvas: &mut Canvas<Window>, my_chip8: &Chip8)
 	for (i, val) in my_chip8.gfx.iter().enumerate()
 	{
 		if i > 0 && i % 64 == 0 { y += 10; x = 0; }
-		if i >= my_chip8.gfx.len()-1 { y = 0; }
+		if i > my_chip8.gfx.len()-1 { y = 0; }
 		if *val == 1 { canvas.fill_rect(Rect::new(x,y,10,10)).unwrap(); }
 		x += 10;
 	}
@@ -42,7 +41,6 @@ fn handle_events(event_pump: &mut sdl2::EventPump, my_chip8: &mut Chip8) -> bool
 			Event::Quit {..} |
 			Event::KeyDown { keycode: Some(Keycode::Escape), .. } => exit = true,
 
-			// Maybe change key[] to a bool?
 			Event::KeyDown { keycode: Some(Keycode::Num0), .. } => my_chip8.key[0]  = 1,
 			Event::KeyDown { keycode: Some(Keycode::Num1), .. } => my_chip8.key[1]  = 1,
 			Event::KeyDown { keycode: Some(Keycode::Num2), .. } => my_chip8.key[2]  = 1,
@@ -94,7 +92,7 @@ fn main()
 	let mut canvas = sdl_context
 				.video()
 				.unwrap()
-				.window("Spooky", 640, 320)
+				.window(GAME_NAME, 640, 320)
 				.position_centered()
 				.build()
 				.unwrap()
@@ -102,14 +100,14 @@ fn main()
 				.build()
 				.unwrap();
 
-	my_chip8.load_game(GAME);
+	my_chip8.load_game(GAME_DIR, GAME_NAME);
 
 	// Emulation loop
 	loop
 	{
+		draw_frame(&mut canvas, &my_chip8);
 		my_chip8.emulate_cycle();
 		if handle_events(&mut event_pump, &mut my_chip8) { break; }
-		if my_chip8.draw_flag { draw_frame(&mut canvas, &my_chip8); }
 		std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 144));
 	}
 }

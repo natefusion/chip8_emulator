@@ -40,10 +40,7 @@ pub struct Chip8
 	pub key: [u8;16],
 
 	// Creates the fontset, there are 16 total characters
-	fontset: [u8;80],
-
-	// If true, redraw the screen
-	pub draw_flag: bool,
+	fontset: [u8;80]
 }
 
 impl Chip8
@@ -52,41 +49,40 @@ impl Chip8
 	{
 		let mut chip = Chip8
 		{
-			pc:     0x200,       // Program counter starts at 0x200
-			opcode: 0,           // Reset current opcode
-			i:      0,           // Reset index register
-			sp:     0,           // Reset stack pointer
+			pc:     0x200,       
+			opcode: 0,           
+			i:      0,           
+			sp:     0,           
 
-			gfx:    [0;64*32],   // Clear display
-			stack:  [0;16],      // Clear stack
-			v:      [0;16],      // Clear registers v0-vF
-			memory: [0;4096],    // Clear memory
+			gfx:    [0;64*32],   
+			stack:  [0;16],      
+			v:      [0;16],      
+			memory: [0;4096],    
 
-			delay_timer: 0,      // Reset delay timer
-			sound_timer: 0,      // Reset sound timer
+			delay_timer: 0,      
+			sound_timer: 0,      
 			key: [0;16],
 
 			fontset:
-			{           // Character values for fontset
-				[0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-				0x20, 0x60, 0x20, 0x20, 0x70,  // 1
-				0xF0, 0x10, 0xF0, 0x80, 0xF0,  // 2
-				0xF0, 0x10, 0xF0, 0x10, 0xF0,  // 3
-				0x90, 0x90, 0xF0, 0x10, 0x10,  // 4
-				0xF0, 0x80, 0xF0, 0x10, 0xF0,  // 5
-				0xF0, 0x80, 0xF0, 0x90, 0xF0,  // 6
-				0xF0, 0x10, 0x20, 0x40, 0x40,  // 7
-				0xF0, 0x90, 0xF0, 0x90, 0xF0,  // 8
-				0xF0, 0x90, 0xF0, 0x10, 0xF0,  // 9
-				0xF0, 0x90, 0xF0, 0x90, 0x90,  // A
-				0xE0, 0x90, 0xE0, 0x90, 0xE0,  // B
-				0xF0, 0x80, 0x80, 0x80, 0xF0,  // C
-				0xE0, 0x90, 0x90, 0x90, 0xE0,  // D
-				0xF0, 0x80, 0xF0, 0x80, 0xF0,  // E
-				0xF0, 0x80, 0xF0, 0x80, 0x80]  // F
-			},
+			{[
+				0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+  				0x20, 0x60, 0x20, 0x20, 0x70, // 1
+  				0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+  				0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+  				0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+  				0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+  				0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+  				0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+  				0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+  				0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+  				0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+  				0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+  				0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+  				0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+  				0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+  				0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+			]}
 
-			draw_flag: true,    // Reset redraw flag
 		};
 
 		// fontset is stored from 0x000 to 0x1FF in memory
@@ -116,7 +112,6 @@ impl Chip8
 					0x0000 =>
 					{
 						for a in self.gfx.iter_mut() { *a = 0; }
-						self.draw_flag = true;
 						self.pc += 2;
 					}
 
@@ -335,7 +330,6 @@ impl Chip8
 					}
 				}
 
-				self.draw_flag = true;
 				self.pc += 2;
 			}
 
@@ -472,23 +466,24 @@ impl Chip8
 	}
 
 	// Load a game from the current directory
-	pub fn load_game(&mut self, game: &str)
+	pub fn load_game(&mut self, game_dir: &str, game_name: &str)
 	{
-		println!("Loading {}…",game);
+		println!("Loading {}…",game_name);
+		let game = game_dir.to_owned()+game_name;
 		let mut file = File::open(game).expect("Please enter a valid file");
 		let mut buffer = Vec::new(); // Load game into buffer first
 		file.read_to_end(&mut buffer).expect("Error reading file");
 
 		// 512 == 0x200
 		if 4096 - 512 > buffer.len() {
-			for (i,val) in buffer.iter().enumerate()
-			{
+			for (i,val) in buffer.iter().enumerate() {
 				self.memory[i+512] = *val;
 			}
 		} else {
 			println!("Error: ROM too big");
+			std::process::exit(1);
 		}
 
-		println!("Loaded {}",game);
+		println!("Loaded {}",game_name);
 	}
 }
