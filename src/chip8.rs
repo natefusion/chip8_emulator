@@ -334,12 +334,10 @@ impl Chip8
 							if self.gfx[row][col] == 1 {
 								self.v[0xF] = 1;
 							}
-
 							self.gfx[row][col] ^= 1;
 						}
 					}
 				}
-
 				self.pc += 2;
 			}
 
@@ -390,7 +388,8 @@ impl Chip8
 						{
 							for val in self.key.iter()
 							{
-								if *val == 1 {
+								if *val == 1
+								{
 									key_pressed = 1;
 									self.v[((self.opcode & 0x0F00) >> 8) as usize] = *val as u8;
 								}
@@ -469,7 +468,8 @@ impl Chip8
 			self.delay_timer -= 1;
 		}
 
-		if self.sound_timer > 0 {
+		if self.sound_timer > 0
+		{
 			if self.sound_timer == 1 { println!("PRETEND THIS IS A SOUND"); }
 			self.sound_timer -= 1;
 		}
@@ -485,15 +485,17 @@ impl Chip8
 		file.read_to_end(&mut buffer).expect("Error reading file");
 
 		// 512 == 0x200
-		if 4096 - 512 > buffer.len() {
+		if 4096 - 512 > buffer.len()
+		{
 			for (i,val) in buffer.iter().enumerate() {
 				self.memory[i+512] = *val;
 			}
-		} else {
+		}
+		else
+		{
 			println!("Error: ROM too big");
 			std::process::exit(1);
 		}
-
 		println!("Loaded {}",game_name);
 	}
 }

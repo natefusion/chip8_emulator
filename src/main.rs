@@ -91,15 +91,15 @@ fn main()
 
 	// I know it's long, deal with it :^)
 	let mut canvas = sdl_context
-				.video()
-				.unwrap()
-				.window(GAME_NAME, 64*MOD, 32*MOD)
-				.position_centered()
-				.build()
-				.unwrap()
-				.into_canvas()
-				.build()
-				.unwrap();
+		.video()
+		.unwrap()
+		.window(GAME_NAME, 64*MOD, 32*MOD)
+		.position_centered()
+		.build()
+		.unwrap()
+		.into_canvas()
+		.build()
+		.unwrap();
 
 	my_chip8.load_game(GAME_DIR, GAME_NAME);
 
