@@ -27,7 +27,7 @@ pub struct Chip8
 	i: u16,
 	pc: u16,
 	// For graphics. array of on (1) or off (0) pixels
-	pub gfx: [u8;64*32],
+	pub gfx: [[u8;64];32],
 	// Two timers that count at 60Hz, when set above 0 they count down.
 	delay_timer: u8,
 	sound_timer: u8,
@@ -54,7 +54,7 @@ impl Chip8
 			i:      0,           
 			sp:     0,           
 
-			gfx:    [0;64*32],   
+			gfx:    [[0;64];32],   
 			stack:  [0;16],      
 			v:      [0;16],      
 			memory: [0;4096],    
@@ -111,7 +111,12 @@ impl Chip8
 					// 00E0: Clears the screen
 					0x0000 =>
 					{
-						for a in self.gfx.iter_mut() { *a = 0; }
+						for i in self.gfx.iter_mut()
+						{
+							for val in i.iter_mut() {
+								*val = 0;
+							}
+						}
 						self.pc += 2;
 					}
 
@@ -318,14 +323,19 @@ impl Chip8
 				self.v[0xF] = 0;
 				for yline in 0..height
 				{
-					pixel = self.memory[(self.i + yline) as usize] as u16;
+					pixel = self.memory[(self.i+yline) as usize].into();
 					for xline in 0..8
 					{
-						if pixel & (0x80 >> xline) != 0{
-							if self.gfx[(x+xline+((y+yline)*64)) as usize] == 1 {
+						if pixel & (0x80 >> xline) != 0
+						{
+							let row = (y+yline) as usize;
+							let col = (x+xline) as usize;
+
+							if self.gfx[row][col] == 1 {
 								self.v[0xF] = 1;
 							}
-							self.gfx[(x+xline+((y+yline) * 64)) as usize] ^= 1;
+
+							self.gfx[row][col] ^= 1;
 						}
 					}
 				}

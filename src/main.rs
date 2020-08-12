@@ -11,7 +11,8 @@ use sdl2::video::Window;
 
 
 const GAME_DIR: &str = "/home/nathan/Downloads/c8games/";
-const GAME_NAME: &str = "KALEID";
+const GAME_NAME: &str = "TETRIS";
+const MOD: u32 = 10;
 
 fn draw_frame(canvas: &mut Canvas<Window>, my_chip8: &Chip8)
 {
@@ -19,14 +20,14 @@ fn draw_frame(canvas: &mut Canvas<Window>, my_chip8: &Chip8)
 	canvas.clear();
 	canvas.set_draw_color(Color::RGB(0,0,0));
 
-	let mut x: i32 = 0;
-	let mut y: i32 = 0;
-	for (i, val) in my_chip8.gfx.iter().enumerate()
+	for (y, i) in my_chip8.gfx.iter().enumerate()
 	{
-		if i > 0 && i % 64 == 0 { y += 10; x = 0; }
-		if i > my_chip8.gfx.len()-1 { y = 0; }
-		if *val == 1 { canvas.fill_rect(Rect::new(x,y,10,10)).unwrap(); }
-		x += 10;
+		for (x, val) in i.iter().enumerate()
+		{
+			let x = (x as u32 * MOD) as i32;
+			let y = (y as u32 * MOD) as i32;
+			if *val == 1 { canvas.fill_rect(Rect::new(x,y,MOD,MOD)).unwrap(); }
+		}
 	}
 	canvas.present();
 }
@@ -92,7 +93,7 @@ fn main()
 	let mut canvas = sdl_context
 				.video()
 				.unwrap()
-				.window(GAME_NAME, 640, 320)
+				.window(GAME_NAME, 64*MOD, 32*MOD)
 				.position_centered()
 				.build()
 				.unwrap()
