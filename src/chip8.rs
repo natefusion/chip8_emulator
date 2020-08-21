@@ -416,6 +416,7 @@ impl Chip8
 
 		    0x001E =>
 		    {
+
 			self.i += (self.v[((self.opcode & 0x0F00) >> 8) as usize]) as u16;
 			self.pc += 2;
 		    }
@@ -444,8 +445,6 @@ impl Chip8
 			for a in 0..=(self.opcode & 0x0F00 >> 8) {
 			    self.memory[(a+self.i) as usize] = self.v[a as usize];
 			}
-			// From the tutorial's code: On the original interpreter, when the operation is done, i = i + x + 1
-			self.i += ((self.opcode & 0x0F00) >> 8) + 1;
 			self.pc += 2;
 		    }
 		    
@@ -455,8 +454,6 @@ impl Chip8
 			for a in 0..=(self.opcode & 0x0F00 >> 8) {
 			    self.v[a as usize] = self.memory[(a+self.i) as usize];
 			}
-			// From the tutorial's code: On the original interpreter, when the operation is done, i = i + x + 1
-			self.i += ((self.opcode & 0x0F00) >> 8) + 1;
 			self.pc += 2;
 		    }
 		    _ => println!("Unknown opcode: [0xF000]: {:x}",self.opcode),
