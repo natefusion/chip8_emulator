@@ -11,7 +11,7 @@ use sdl2::video::Window;
 
 
 const GAME_DIR: &str = "/home/nathan/Downloads/c8games/";
-const GAME_NAME: &str = "TETRIS";
+const GAME_NAME: &str = "BRIX";
 const MOD: u32 = 10;
 
 fn draw_frame(canvas: &mut Canvas<Window>, my_chip8: &Chip8)
@@ -106,9 +106,10 @@ fn main()
     // Emulation loop
     loop
     {
-	draw_frame(&mut canvas, &my_chip8);
-	my_chip8.emulate_cycle();
+	
+	my_chip8.emulate_cycle();	
+	if my_chip8.draw_flag { draw_frame(&mut canvas, &my_chip8); }
 	if handle_events(&mut event_pump, &mut my_chip8) { break; }
-	std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 144));
+	std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }

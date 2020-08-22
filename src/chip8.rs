@@ -40,7 +40,10 @@ pub struct Chip8
     pub key: [u8;16],
 
     // Creates the fontset, there are 16 total characters
-    fontset: [u8;80]
+    fontset: [u8;80],
+
+    // Tell sdl when to draw a frame
+    pub draw_flag: bool,
 }
 
 impl Chip8
@@ -62,6 +65,8 @@ impl Chip8
 	    delay_timer: 0,      
 	    sound_timer: 0,      
 	    key: [0;16],
+	    draw_flag: false,
+	    
 
 	    fontset:
 	    {[
@@ -95,9 +100,16 @@ impl Chip8
     {
 	// Fetch opcode
 	// Merges two successive bytes from the memory to form an opcode
-	let op1: u16 = (self.memory[self.pc as usize]).into(); // I need to convert the memory to u16 first
-	let op2: u16 = (self.memory[(self.pc+1) as usize]).into();
+	let op1 = (self.memory[self.pc as usize]) as u16; // I need to convert the memory to u16 first
+	let op2 = (self.memory[(self.pc+1) as usize]) as u16;
 	self.opcode = op1 << 8 | op2;
+	self.draw_flag = false;
+
+	let nnn = (self.opcode & 0x0FFF) as u16;        // addr; 12-bit value
+	let kk = (self.opcode & 0x00FF) as u8;          // byte; 8-bit value
+	let n = (self.opcode & 0x000F) as u8;           // nibble; 4-bit value
+	let x = ((self.opcode & 0x0F00) >> 8) as usize; // lower 4 bits of the high byte
+	let y = ((self.opcode & 0x00F0) >> 4) as usize; // upper 4 bits of the low byte
 
 	// Decode opcode
 	// Reads first 4 bits of the opcode (highest 4 bits)
@@ -106,7 +118,7 @@ impl Chip8
 	    0x0000 =>
 	    {
 		// Some opcodes need the last four bits to be read (lowest 4 bits)
-		match self.opcode & 0x000F
+		match n
 		{
 		    // 00E0: Clears the screen
 		    0x0000 =>
@@ -118,6 +130,7 @@ impl Chip8
 			    }
 			}
 			self.pc += 2;
+			self.draw_flag = true;
 		    }
 
 		    // 00EE: Returns from the subroutine
@@ -132,20 +145,20 @@ impl Chip8
 	    }
 
 	    // 1NNN: Jump to location NNN
-	    0x1000 => self.pc = self.opcode & 0x0FFF,
+	    0x1000 => self.pc = nnn,
 
 	    // 2NNN: Execute subroutine starting at NNN
 	    0x2000 =>
 	    {
 		self.stack[self.sp as usize] = self.pc;
 		self.sp += 1;
-		self.pc = self.opcode & 0x0FFF;
+		self.pc = nnn;
 	    }
 
 	    // 3xkk: Skip next instruction if vx == kk
 	    0x3000 =>
 	    {
-		if self.v[((self.opcode & 0x0F00) >> 8) as usize] == (self.opcode & 0x00FF) as u8 {
+		if self.v[x] == kk {
 		    self.pc += 4;
 		} else {
 		    self.pc += 2;
@@ -155,7 +168,7 @@ impl Chip8
 	    // 4xkk: Skip next instruction if vx != kk
 	    0x4000 =>
 	    {
-		if self.v[((self.opcode & 0x0F00) >> 8) as usize] != (self.opcode & 0x00FF) as u8 {
+		if self.v[x] != kk {
 		    self.pc += 4;
 		} else {
 		    self.pc += 2;
@@ -165,7 +178,7 @@ impl Chip8
 	    // 5xy0: Skip next instruction if vx == vy
 	    0x5000 =>
 	    {
-		if self.v[((self.opcode & 0x0F00) >> 8) as usize] == self.v[((self.opcode & 0x00F0) >> 4) as usize] {
+		if self.v[x] == self.v[y] {
 		    self.pc += 4;
 		} else {
 		    self.pc += 2;
@@ -175,70 +188,70 @@ impl Chip8
 	    // 6xkk: Set vx = kk
 	    0x6000 =>
 	    {
-		self.v[((self.opcode & 0x0F00) >> 8) as usize] = (self.opcode & 0x00FF) as u8;
+		self.v[x] = kk;
 		self.pc += 2;
 	    }
 			
 	    // 7xkk: Set vx = vx + kk
 	    0x7000 =>
 	    {
-		self.v[((self.opcode & 0x0F00) >> 8) as usize] += (self.opcode & 0x00FF) as u8;
+		self.v[x] += kk;
 		self.pc += 2;
 	    }
 	    
 	    0x8000 =>
 	    {
-		match self.opcode & 0x000F
+		match n
 		{
 		    // 8xy0: Set vx = vy
 		    0x0000 =>
 		    {
-			self.v[((self.opcode & 0x0F00) >> 8) as usize] = self.v[((self.opcode & 0x00F0) >> 4) as usize];
+			self.v[x] = self.v[y];
 			self.pc += 2;
 		    }
 		    
 		    // 8xy1: Set vx = vx | vy
 		    0x0001 =>
 		    {
-			self.v[((self.opcode & 0x0F00) >> 8) as usize] |= self.v[((self.opcode & 0x00F0) >> 4) as usize];
+			self.v[x] |= self.v[y];
 			self.pc += 2;
 		    }
 		    
 		    // 8xy2: Set vx = vx & vy
 		    0x0002 =>
 		    {
-			self.v[((self.opcode & 0x0F00) >> 8) as usize] &= self.v[((self.opcode & 0x00F0) >> 4) as usize];
+			self.v[x] &= self.v[y];
 			self.pc += 2;
 		    }
 		    
 		    // 8xy3: set vx = vx ^ vy
 		    0x0003 =>
 		    {
-			self.v[((self.opcode & 0x0F00) >> 8) as usize] ^= self.v[((self.opcode & 0x00F0) >> 4) as usize];
+			self.v[x] ^= self.v[y];
 			self.pc += 2;
 		    }
 		    
 		    // 8xy4: Adds the value of register vy to register vx
 		    0x0004 =>
 		    {
-			if self.v[((self.opcode & 0x00F0) >> 4) as usize] > (0xFF - self.v[((self.opcode & 0x0F00) >> 8) as usize]) {
+			if self.v[y] > (0xFF - self.v[x]) {
 			    self.v[0xF] = 1; // carry
 			} else {
 			    self.v[0xF] = 0;
 			}
-			self.v[((self.opcode & 0x0F00) >> 8) as usize] += self.v[((self.opcode & 0x00F0) >> 4) as usize];
+			self.v[x] += self.v[y];
 			self.pc += 2;
 		    }
 		    
 		    // 8xy5: Set vx = vx - vy, set vf = NOT borrow
 		    0x0005 =>
 		    {
-			if self.v[((self.opcode & 0x0F00) >> 8) as usize] > self.v[((self.opcode & 0x00F0) >> 4) as usize] {
+			if self.v[x] > self.v[y] {
 			    self.v[0xF] = 1;
 			} else {
 			    self.v[0xF] = 0;
 			}
-			self.v[((self.opcode & 0x0F00) >> 8) as usize] -= self.v[((self.opcode & 0x0F00) >> 8) as usize];
+			self.v[x] -= self.v[x];
 			self.pc += 2;
 		    }
 		    
@@ -246,25 +259,25 @@ impl Chip8
 		    0x0006 =>
 		    {
 			// If LSB is equal to 1
-			if (self.v[((self.opcode & 0x0F00) >> 8) as usize] & 0x000F) >> 3 == 1 {
+			if (self.v[x] & n) >> 3 == 1 {
 			    self.v[0xF] = 1;
 			} else {
 			    self.v[0xF] = 0;
 			}
-			self.v[((self.opcode & 0x0F00) >> 8) as usize] /= 2;
+			self.v[x] /= 2;
 			self.pc += 2;
 		    }
 		    
 		    // 8xy7: Set vx = vy - vx, set vf = NOT borrow
 		    0x0007 =>
 		    {
-			if self.v[((self.opcode & 0x00F0) >> 4) as usize] > self.v[((self.opcode & 0x0F00) >> 8) as usize] {
+			if self.v[y] > self.v[x] {
 			    self.v[0xF] = 1;
 			} else {
 			    self.v[0xF] = 0;
 			}
-			self.v[((self.opcode & 0x0F00) >> 8) as usize] =
-			    self.v[((self.opcode & 0x00F0) >> 4) as usize] - self.v[((self.opcode & 0x0F00) >> 8) as usize];
+			self.v[x] =
+			    self.v[y] - self.v[x];
 			self.pc += 2;
 		    }
 		    
@@ -272,12 +285,12 @@ impl Chip8
 		    0x000e =>
 		    {
 			//if MSB is equal to 1
-			if ((self.v[((self.opcode & 0x0F00) >> 8) as usize] as u16) & 0xF000) >> 15 == 1 {
+			if ((self.v[x] as u16) & 0xF000) >> 15 == 1 {
 			    self.v[0xF] = 1;
 			} else {
 			    self.v[0xF] = 0;
 			}
-			self.v[((self.opcode & 0x0F00) >> 8) as usize] *= 2;
+			self.v[x] *= 2;
 			self.pc += 2;
 		    }
 		    _ => println!("Unknown opcode [0x8000]: 0x{:x}",self.opcode),
@@ -287,7 +300,7 @@ impl Chip8
 	    // Skip next instruction if vx != vy
 	    0x9000 =>
 	    {
-		if self.v[((self.opcode & 0x0F00) >> 8) as usize] != self.v[((self.opcode & 0x00F0) >> 4) as usize] {
+		if self.v[x] != self.v[y] {
 		    self.pc += 4;
 		} else {
 		    self.pc += 2;
@@ -297,33 +310,32 @@ impl Chip8
 	    // ANNN: Store memory address NNN in register i
 	    0xA000 =>
 	    {
-		self.i = self.opcode & 0x0FFF;
+		self.i = nnn;
 		self.pc += 2;
 	    }
 	    
 	    // BNNN: Jump to location NNN + v0
-	    0xB000 => self.pc = (self.opcode & 0x0FFF) + (self.v[0]) as u16,
+	    0xB000 => self.pc = nnn + (self.v[0]) as u16,
 	    
 	    // cxkk: Set vx = random byte AND kk
 	    0xC000 =>
 	    {
-		self.v[((self.opcode & 0x0F00) >> 8) as usize] = 
-		    rand::thread_rng().gen_range(0,255) & (self.opcode & 0x00FF) as u8;
+		self.v[x] = rand::thread_rng().gen_range(0,255) & kk;
 		self.pc += 2;
 	    }
 	    
 	    // dxyn: Display n-byte sprite starting at memory location 'i' at (vx, vy), set vf = collision
 	    0xD000 =>
 	    {
-		let x: u16 = (self.v[((self.opcode & 0x0F00) >> 8) as usize]).into();
-		let y: u16 = (self.v[((self.opcode & 0x00F0) >> 4) as usize]).into();
-		let height: u16 = self.opcode & 0x000F;
+		let x = self.v[x] as u16;
+		let y = self.v[y] as u16;
+		let height = n as u16;
 		let mut pixel: u16;
 		
 		self.v[0xF] = 0;
 		for yline in 0..height
 		{
-		    pixel = self.memory[(self.i+yline) as usize].into();
+		    pixel = self.memory[(self.i+yline) as usize] as u16;
 		    for xline in 0..8
 		    {
 			if pixel & (0x80 >> xline) != 0
@@ -339,16 +351,17 @@ impl Chip8
 		    }
 		}
 		self.pc += 2;
+		self.draw_flag = true;
 	    }
 	    
 	    0xE000 =>
 	    {
-		match self.opcode & 0x00FF
+		match kk
 		{
 		    // ex9e: Skip next instruction if key with the value of vx is pressed
 		    0x009E =>
 		    {
-			if self.key[(self.v[((self.opcode & 0x0F00) >> 8) as usize]) as usize] != 0 {
+			if self.key[self.v[x] as usize] != 0 {
 			    self.pc += 4;
 			} else {
 			    self.pc += 2;
@@ -358,7 +371,7 @@ impl Chip8
 		    // exa1: Skip next instruction if key with the value of vx is not pressed
 		    0x00A1 =>
 		    {
-			if self.key[(self.v[((self.opcode & 0x0F00) >> 8) as usize]) as usize] == 0 {
+			if self.key[self.v[x] as usize] == 0 {
 			    self.pc += 4;
 			} else {
 			    self.pc += 2;
@@ -370,12 +383,12 @@ impl Chip8
 	    
 	    0xF000 =>
 	    {
-		match self.opcode & 0x00FF
+		match kk
 		{
 		    // fx07: Set vx = delay timer value
 		    0x0007 =>
 		    {
-			self.v[((self.opcode & 0x0F00) >> 8) as usize] = self.delay_timer;
+			self.v[x] = self.delay_timer;
 			self.pc += 2;
 		    }
 		    
@@ -391,7 +404,7 @@ impl Chip8
 				if *val == 1
 				{
 				    key_pressed = 1;
-				    self.v[((self.opcode & 0x0F00) >> 8) as usize] = *val as u8;
+				    self.v[x] = *val as u8;
 				}
 			    }
 			}
@@ -401,14 +414,14 @@ impl Chip8
 		    // fx15: Set delay timer = vx
 		    0x0015 =>
 		    {
-			self.delay_timer = self.v[((self.opcode & 0x0F00) >> 8) as usize];
+			self.delay_timer = self.v[x];
 			self.pc += 2;
 		    }
 		    
 		    // fx18: Set sound timer = vx
 		    0x0018 =>
 		    {
-			self.sound_timer = self.v[((self.opcode & 0x0F00) >> 8) as usize];
+			self.sound_timer = self.v[x];
 			self.pc += 2;
 		    }
 		    
@@ -417,7 +430,7 @@ impl Chip8
 		    0x001E =>
 		    {
 
-			self.i += (self.v[((self.opcode & 0x0F00) >> 8) as usize]) as u16;
+			self.i += self.v[x] as u16;
 			self.pc += 2;
 		    }
 		    
@@ -425,7 +438,7 @@ impl Chip8
 		    // Double check
 		    0x0029 =>
 		    {
-			self.i = (self.v[((self.opcode & 0x0F00) >> 8) as usize]) as u16;
+			self.i = self.v[x] as u16;
 			self.pc += 2;
 		    }
 		    
@@ -433,17 +446,17 @@ impl Chip8
 		    // stored in register vx at address i, i+1, and i+2
 		    0x0033 =>
 		    {
-			self.memory[self.i as usize]   = self.v[((self.opcode & 0x0F00) >> 8) as usize] / 100;
-			self.memory[(self.i as usize)+1] = (self.v[((self.opcode & 0x0F00) >> 8) as usize] / 10) % 10;
-			self.memory[(self.i as usize)+2] = (self.v[((self.opcode & 0x0F00) >> 8) as usize] % 100) % 10;
+			self.memory[self.i as usize]   = self.v[x] / 100;
+			self.memory[1+self.i as usize] = (self.v[x] / 10) % 10;
+			self.memory[2+self.i as usize] = (self.v[x] % 100) % 10;
 			self.pc += 2;
 		    }
 		    
 		    // fx55: Store registers v0 through vx in memory starting at location i
 		    0x0055 =>
 		    {
-			for a in 0..=(self.opcode & 0x0F00 >> 8) {
-			    self.memory[(a+self.i) as usize] = self.v[a as usize];
+			for a in 0..=x {
+			    self.memory[a+self.i as usize] = self.v[a];
 			}
 			self.pc += 2;
 		    }
@@ -451,8 +464,8 @@ impl Chip8
 		    // fx65: Read registers V0 through Vx from memory starting at location i
 		    0x0065 =>
 		    {
-			for a in 0..=(self.opcode & 0x0F00 >> 8) {
-			    self.v[a as usize] = self.memory[(a+self.i) as usize];
+			for a in 0..=x {
+			    self.v[a] = self.memory[a+self.i as usize];
 			}
 			self.pc += 2;
 		    }
