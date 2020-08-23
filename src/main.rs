@@ -11,8 +11,11 @@ use sdl2::video::Window;
 
 
 const GAME_DIR: &str = "/home/nathan/Downloads/c8games/";
-const GAME_NAME: &str = "BRIX";
-const MOD: u32 = 10;
+const GAME_NAME: &str = "TETRIS";
+
+const WIDTH: u32 = 64;
+const HEIGHT: u32 = 32;
+const SCALE: u32 = 10;
 
 fn draw_frame(canvas: &mut Canvas<Window>, my_chip8: &Chip8)
 {
@@ -24,9 +27,9 @@ fn draw_frame(canvas: &mut Canvas<Window>, my_chip8: &Chip8)
     {
 	for (x, val) in i.iter().enumerate()
 	{
-	    let x = (x as u32 * MOD) as i32;
-	    let y = (y as u32 * MOD) as i32;
-	    if *val == 1 { canvas.fill_rect(Rect::new(x,y,MOD,MOD)).unwrap(); }
+	    let x = (x as u32 * SCALE) as i32;
+	    let y = (y as u32 * SCALE) as i32;
+	    if *val == 1 { canvas.fill_rect(Rect::new(x,y,SCALE,SCALE)).unwrap(); }
 	}
     }
     canvas.present();
@@ -93,7 +96,7 @@ fn main()
     let mut canvas = sdl_context
 	.video()
 	.unwrap()
-	.window(GAME_NAME, 64*MOD, 32*MOD)
+	.window(GAME_NAME, WIDTH*SCALE, HEIGHT*SCALE)
 	.position_centered()
 	.build()
 	.unwrap()
@@ -102,6 +105,7 @@ fn main()
 	.unwrap();
 
     my_chip8.load_game(GAME_DIR, GAME_NAME);
+    my_chip8.sound_state = false;
 
     // Emulation loop
     loop
@@ -110,6 +114,6 @@ fn main()
 	my_chip8.emulate_cycle();	
 	if my_chip8.draw_flag { draw_frame(&mut canvas, &my_chip8); }
 	if handle_events(&mut event_pump, &mut my_chip8) { break; }
-	std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+	std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 300));
     }
 }

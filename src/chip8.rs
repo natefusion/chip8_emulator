@@ -1,6 +1,5 @@
 use rand::Rng;
-use std::fs::File;
-use std::io::Read;
+use std::fs;
 
 pub struct Chip8
 {
@@ -44,6 +43,8 @@ pub struct Chip8
 
     // Tell sdl when to draw a frame
     pub draw_flag: bool,
+
+    pub sound_state: bool
 }
 
 impl Chip8
@@ -66,6 +67,7 @@ impl Chip8
 	    sound_timer: 0,      
 	    key: [0;16],
 	    draw_flag: false,
+	    sound_state: true,
 	    
 
 	    fontset:
@@ -110,6 +112,8 @@ impl Chip8
 	let n = (self.opcode & 0x000F) as u8;           // nibble; 4-bit value
 	let x = ((self.opcode & 0x0F00) >> 8) as usize; // lower 4 bits of the high byte
 	let y = ((self.opcode & 0x00F0) >> 4) as usize; // upper 4 bits of the low byte
+
+	//println!("opcode: {}\nnnn: {}\nkk: {}\nn: {}\nvx: {}",self.opcode,nnn,kk,n,self.v[x]);
 
 	// Decode opcode
 	// Reads first 4 bits of the opcode (highest 4 bits)
@@ -190,12 +194,13 @@ impl Chip8
 	    {
 		self.v[x] = kk;
 		self.pc += 2;
+		
 	    }
 			
 	    // 7xkk: Set vx = vx + kk
 	    0x7000 =>
 	    {
-		self.v[x] += kk;
+		self.v[x] = self.v[x].wrapping_add(kk);
 		self.pc += 2;
 	    }
 	    
@@ -239,7 +244,7 @@ impl Chip8
 			} else {
 			    self.v[0xF] = 0;
 			}
-			self.v[x] += self.v[y];
+			self.v[x] = self.v[x].wrapping_add(self.v[y]);
 			self.pc += 2;
 		    }
 		    
@@ -331,7 +336,10 @@ impl Chip8
 		let y = self.v[y] as u16;
 		let height = n as u16;
 		let mut pixel: u16;
-		
+
+		let gfx_c = self.gfx[0].len()-1;
+		let gfx_r = self.gfx.len()-1;
+
 		self.v[0xF] = 0;
 		for yline in 0..height
 		{
@@ -340,8 +348,12 @@ impl Chip8
 		    {
 			if pixel & (0x80 >> xline) != 0
 			{
-			    let row = (y+yline) as usize;
-			    let col = (x+xline) as usize;
+			    let mut row = (y+yline) as usize;
+			    let mut col = (x+xline) as usize;
+
+			    // wraps values for user-movable items that try to move out-of-bounds
+			    if row > gfx_r { row = gfx_r; }
+			    if col > gfx_c { col = gfx_c; }
 			    
 			    if self.gfx[row][col] == 1 {
 				self.v[0xF] = 1;
@@ -481,7 +493,9 @@ impl Chip8
 	
 	if self.sound_timer > 0
 	{
-	    if self.sound_timer == 1 { println!("PRETEND THIS IS A SOUND"); }
+	    if self.sound_timer == 1 && self.sound_state {
+		println!("PRETEND THIS IS A SOUND");
+	    }
 	    self.sound_timer -= 1;
 	}
     }
@@ -490,9 +504,7 @@ impl Chip8
     pub fn load_game(&mut self, game_dir: &str, game_name: &str)
     {
 	let game = game_dir.to_owned()+game_name;
-	let mut file = File::open(game).expect("Please enter a valid file");
-	let mut buffer = Vec::new(); // Load game into buffer first
-	file.read_to_end(&mut buffer).expect("Error reading file");
+	let buffer: Vec::<u8> = fs::read(game).expect("File read error");
 	
 	// 512 == 0x200
 	if 4096 - 512 > buffer.len()
