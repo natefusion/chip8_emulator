@@ -256,7 +256,7 @@ impl Chip8
 			} else {
 			    self.v[0xF] = 0;
 			}
-			self.v[x] -= self.v[x];
+			self.v[x] = self.v[x].wrapping_sub(self.v[y]);
 			self.pc += 2;
 		    }
 		    
@@ -281,8 +281,7 @@ impl Chip8
 			} else {
 			    self.v[0xF] = 0;
 			}
-			self.v[x] =
-			    self.v[y] - self.v[x];
+			self.v[x] = self.v[y] - self.v[x];
 			self.pc += 2;
 		    }
 		    
@@ -302,7 +301,7 @@ impl Chip8
 		}
 	    }
 	    
-	    // Skip next instruction if vx != vy
+	    // 9xy0: Skip next instruction if vx != vy
 	    0x9000 =>
 	    {
 		if self.v[x] != self.v[y] {
@@ -405,7 +404,6 @@ impl Chip8
 		    }
 		    
 		    // fx0a: Wait for a key press, store the value of the key in vx
-		    // Double check
 		    0x000A =>
 		    {
 			let mut key_pressed = 0;
@@ -438,16 +436,13 @@ impl Chip8
 		    }
 		    
 		    // fx1e: Set i = i + vx
-
 		    0x001E =>
 		    {
-
 			self.i += self.v[x] as u16;
 			self.pc += 2;
 		    }
 		    
 		    // fx29: Set i = location of sprite for digit vx
-		    // Double check
 		    0x0029 =>
 		    {
 			self.i = self.v[x] as u16;
