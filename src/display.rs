@@ -31,8 +31,8 @@ impl Display {
 	    .unwrap();
 	
 	Display {
-	    event_pump: event_pump,
-	    canvas: canvas,
+	    event_pump,
+	    canvas,
 	}
     }
     
