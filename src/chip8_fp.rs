@@ -15,6 +15,7 @@ pub struct Chip8
     v: [u8;16],
     i: u16,
     pc: u16,
+    pc_inc: u16,
     pub gfx: [[u8;64];32],
     delay_timer: u8,
     sound_timer: u8,
@@ -23,7 +24,7 @@ pub struct Chip8
     pub key: [u8;16],
     fontset: [u8;80],
     pub draw_flag: bool,
-    pub sound_state: bool
+    pub sound_state: bool,
 }
 
 struct Bit
@@ -71,13 +72,15 @@ impl Chip8
 	    ]},
 
 	    t_F000:
+
 	    {[
 		Chip8::i_FX07, Chip8::i_FX0A, Chip8::i_FX15,
 		Chip8::i_FX18, Chip8::i_FX1E, Chip8::i_FX29,
 		Chip8::i_FX33, Chip8::i_FX55, Chip8::i_FX65
 	    ]},
 	    
-	    pc:     0x200,       
+	    pc:     0x200,
+	    pc_inc: 2,
 	    opcode: 0,           
 	    i:      0,           
 	    sp:     0,           
@@ -106,7 +109,6 @@ impl Chip8
   		0xF0, 0x10, 0x20, 0x40, 0x40, // 7
   		0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
   		0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-
   		0xF0, 0x90, 0xF0, 0x90, 0x90, // A
   		0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
   		0xF0, 0x80, 0x80, 0x80, 0xF0, // C
@@ -125,15 +127,12 @@ impl Chip8
     fn fetch(&mut self)
     {
 	let op1 = (self.memory[self.pc as usize]) as u16;
-	let op2 = (self.memory[(self.pc+1) as usize]) as u16;
+	let op2 = (self.memory[1+self.pc as usize]) as u16;
 	self.opcode = op1 << 8 | op2;
-	//self.pc += 2;
-	
     }
 
     pub fn emulate_cycle(&mut self)
     {
-	// This werks
 	self.fetch();
 
 	let bit = Bit
@@ -159,6 +158,9 @@ impl Chip8
 	    }
 	    self.sound_timer -= 1;
 	}
+
+	self.pc += self.pc_inc;
+	self.pc_inc = 2;
     }
 
     // Instructions
@@ -183,14 +185,13 @@ impl Chip8
 	        _ => self.i_NULL(bit)
 	}
     }
-
-    fn i_NULL(&mut self, _bit: &Bit)
+    
+    fn i_NULL(&mut self, _bit:  &Bit)
     {
 	println!("Invalid opcode: {} (raw opcode)",self.opcode);
 	std::process::exit(1);
     }
-
-
+    
     // Clears the screen
     fn i_00E0(&mut self, _bit: &Bit)
     {
@@ -200,100 +201,83 @@ impl Chip8
 		*val = 0;
 	    }
 	}
-	self.pc += 2;
 	self.draw_flag = true;
     }
-
     // Returns from the subroutine
     fn i_00EE(&mut self, _bit: &Bit)
     {
-	self.sp -= 1;
 	self.pc = self.stack[self.sp as usize];
-	self.pc += 2;
+	self.sp -= 1;
     }
-
     // Jump to location NNN
-    fn i_1NNN(&mut self, bit: &Bit) { self.pc = bit.nnn; }
+    fn i_1NNN(&mut self, bit: &Bit)
+    {
+	self.pc = bit.nnn;
+	self.pc_inc = 0;
+    }
     // Execute subroutine starting at NNN
     fn i_2NNN(&mut self, bit: &Bit)
     {
-	self.stack[self.sp as usize] = self.pc;
 	self.sp += 1;
+	self.stack[self.sp as usize] = self.pc;
 	self.pc = bit.nnn;
+	self.pc_inc = 0;
     }
     // Skip next instruction if VX == KK
     fn i_3XKK(&mut self, bit: &Bit)
     {
 	if self.v[bit.x] == bit.kk {
-	    self.pc += 4;
-	} else {
-	    self.pc += 2;
+	    self.pc_inc = 4;
 	}
     }
     // Skip next instruction if VX != KK
     fn i_4XKK(&mut self, bit: &Bit)
     {
 	if self.v[bit.x] != bit.kk {
-	    self.pc += 4;
-	} else {
-	    self.pc += 2;
+	    self.pc_inc = 4;
 	}
     }
     // Skip next instruction if VX == VY
     fn i_5XY0(&mut self, bit: &Bit)
     {
 	if self.v[bit.x] == self.v[bit.y] {
-	    self.pc += 4;
-	} else {
-	    self.pc += 2;
+	    self.pc_inc = 4;
 	}
     }
     // Set VX == KK
-    fn i_6XKK(&mut self, bit: &Bit)
-    {
+    fn i_6XKK(&mut self, bit: &Bit) {
 	self.v[bit.x] = bit.kk;
-	self.pc += 2;
     }
     // Set VX += KK
-    fn i_7XKK(&mut self, bit: &Bit)
-    {
+    fn i_7XKK(&mut self, bit: &Bit) {
 	self.v[bit.x] = self.v[bit.x].wrapping_add(bit.kk);
-	self.pc += 2;
     }
     // Set VX = VY
-    fn i_8XY0(&mut self, bit: &Bit)
-    {
+    fn i_8XY0(&mut self, bit: &Bit) {
 	self.v[bit.x] = self.v[bit.y];
-	self.pc += 2;
     }
     // Set VX |= VY
-    fn i_8XY1(&mut self, bit: &Bit)
-    {
+    fn i_8XY1(&mut self, bit: &Bit) {
 	self.v[bit.x] |= self.v[bit.y];
-	self.pc += 2;
     }
     // Set VX &= VY
-    fn i_8XY2(&mut self, bit: &Bit)
-    {
+    fn i_8XY2(&mut self, bit: &Bit) {
 	self.v[bit.x] &= self.v[bit.y];
-	self.pc += 2;
     }
     // Set VX ^= VY
-    fn i_8XY3(&mut self, bit: &Bit)
-    {
+    fn i_8XY3(&mut self, bit: &Bit) {
 	self.v[bit.x] ^= self.v[bit.y];
-	self.pc += 2;
     }
-    // Adds the value of register VY to register VX
+    // Sets VX = VX + VY, set VF = carry
     fn i_8XY4(&mut self, bit: &Bit)
     {
-	if self.v[bit.y] > (0xFF - self.v[bit.x]) {
-	    self.v[0xF] = 1; // carry
+	let vxy = (self.v[bit.x].wrapping_add(self.v[bit.y])) as u16;
+	if vxy > 255 {
+	    self.v[0xF] = 1;
 	} else {
 	    self.v[0xF] = 0;
 	}
-	self.v[bit.x] = self.v[bit.x].wrapping_add(self.v[bit.y]);
-	self.pc += 2;
+	self.v[bit.x] = (vxy & 0x00FF) as u8;
     }
     // Set VX -= VY. set VF = NOT borrow
     fn i_8XY5(&mut self, bit: &Bit)
@@ -304,19 +288,12 @@ impl Chip8
 	    self.v[0xF] = 0;
 	}
 	self.v[bit.x] = self.v[bit.x].wrapping_sub(self.v[bit.y]);
-	self.pc += 2;
     }
     // Set VX = VX SHR 1
     fn i_8XY6(&mut self, bit: &Bit)
     {
-	// If LSB is equal to 1
-	if (self.v[bit.x] & bit.n) >> 3 == 1 {
-	    self.v[0xF] = 1;
-	} else {
-	    self.v[0xF] = 0;
-	}
+	self.v[0xF] = self.v[bit.x] & 1;
 	self.v[bit.x] /= 2;
-	self.pc += 2;
     }
     // Set VX = VY - VX. set VF = NOT borrow
     fn i_8XY7(&mut self, bit: &Bit)
@@ -327,42 +304,33 @@ impl Chip8
 	    self.v[0xF] = 0;
 	}
 	self.v[bit.x] = self.v[bit.y] - self.v[bit.x];
-	self.pc += 2;
     }
     // Set VX = VX SHL 1
     fn i_8XYE(&mut self, bit: &Bit)
     {
-	//if MSB is equal to 1
-	if ((self.v[bit.x] as u16) & 0xF000) >> 15 == 1 {
-	    self.v[0xF] = 1;
-	} else {
-	    self.v[0xF] = 0;
-	}
+	self.v[0xF] = self.v[bit.x] >> 7;
 	self.v[bit.x] *= 2;
-	self.pc += 2;
     }
     // Skip next instruction if VX != VY
     fn i_9XY0(&mut self, bit: &Bit)
     {
 	if self.v[bit.x] != self.v[bit.y] {
-	    self.pc += 4;
-	} else {
-	    self.pc += 2;
+	    self.pc_inc = 4;
 	}
     }
     // Store memory address NNN in register I
-    fn i_ANNN(&mut self, bit: &Bit)
-    {
+    fn i_ANNN(&mut self, bit: &Bit) {
 	self.i = bit.nnn;
-	self.pc += 2;
     }
     // Jump to location NNN + V0
-    fn i_BNNN(&mut self, bit: &Bit) { self.pc = bit.nnn + (self.v[0] as u16); }
-    // Set VX = random byte AND KK
-    fn i_CXKK(&mut self, bit: &Bit)
+    fn i_BNNN(&mut self, bit: &Bit)
     {
+	self.pc = bit.nnn + self.v[0] as u16;
+	self.pc_inc = 0;
+    }
+    // Set VX = random byte AND KK
+    fn i_CXKK(&mut self, bit: &Bit) {
 	self.v[bit.x] = rand::thread_rng().gen_range(0,255) & bit.kk;
-	self.pc += 2;
     }
     // Display n-byte sprite starting at memory location I at (VX,VY). Set VF = collision
     fn i_DXYN(&mut self, bit: &Bit)
@@ -397,73 +365,56 @@ impl Chip8
 		}
 	    }
 	}
-	self.pc += 2;
 	self.draw_flag = true;
     }
     // Skip next instruction if key with the value of VX is pressed
     fn i_EX9E(&mut self, bit: &Bit)
     {
 	if self.key[self.v[bit.x] as usize] != 0 {
-	    self.pc += 4;
-	} else {
-	    self.pc += 2;
+	    self.pc_inc = 4;
 	}
     }
     // Skip next instruction if key with the value of VX is not pressed
     fn i_EXA1(&mut self, bit: &Bit)
     {
 	if self.key[self.v[bit.x] as usize] == 0 {
-	    self.pc += 4;
-	} else {
-	    self.pc += 2;
+	    self.pc_inc = 4;
 	}
     }
     // Set VX = delay timer value
-    fn i_FX07(&mut self, bit: &Bit)
-    {
+    fn i_FX07(&mut self, bit: &Bit) {
 	self.v[bit.x] = self.delay_timer;
-	self.pc += 2;
     }
     // Wait for a key press, store the avlue of the key in VX
     fn i_FX0A(&mut self, bit: &Bit)
     {
-	let mut key_pressed = 0;
-	while key_pressed == 0
+	'key: loop
 	{
 	    for val in self.key.iter()
 	    {
 		if *val == 1
 		{
-		    key_pressed = 1;
-		    self.v[bit.x] = *val as u8;
+		    self.v[bit.x] = *val;
+		    break 'key;
 		}
 	    }
 	}
-	self.pc += 2;
     }
     // Set delay timer = VX
-    fn i_FX15(&mut self, bit: &Bit)
-    {
+    fn i_FX15(&mut self, bit: &Bit) {
 	self.delay_timer = self.v[bit.x];
-	self.pc += 2;
     }
     // Set sound timer = VX
-    fn i_FX18(&mut self, bit: &Bit)
-    {
+    fn i_FX18(&mut self, bit: &Bit) {
 	self.sound_timer = self.v[bit.x];
-	self.pc += 2;
     }
     // Set I += VX
-    fn i_FX1E(&mut self, bit: &Bit)
-    {
+    fn i_FX1E(&mut self, bit: &Bit) {
 	self.i += self.v[bit.x] as u16;
-	self.pc += 2;
     }
     // Set I = location of sprite for digit VX
-    fn i_FX29(&mut self, bit: &Bit)
-    {
-	self.i = self.v[bit.x] as u16;
-	self.pc += 2;
+    fn i_FX29(&mut self, bit: &Bit) {
+	self.i = 5 * self.v[bit.x] as u16; // Sprites are 5 bytes in height
     }
     // Store the binary-coded decimal equivalent of the value
     // stored in register VX at address I, I+1, I+2
@@ -472,7 +423,6 @@ impl Chip8
 	self.memory[self.i as usize]   = self.v[bit.x] / 100;
 	self.memory[1+self.i as usize] = (self.v[bit.x] / 10) % 10;
 	self.memory[2+self.i as usize] = (self.v[bit.x] % 100) % 10;
-	self.pc += 2;
     }
     // Store registers V0 through VX in memory starting at location I
     fn i_FX55(&mut self, bit: &Bit)
@@ -480,15 +430,13 @@ impl Chip8
 	for a in 0..=bit.x {
 	    self.memory[a+self.i as usize] = self.v[a];
 	}
-	self.pc += 2;
     }
     // Read registers V0 through VX from memory starting at location I
     fn i_FX65(&mut self, bit: &Bit)
     {
 	for a in 0..=bit.x {
-	    self.memory[a+self.i as usize] = self.v[a];
+	    self.v[a] = self.memory[a+self.i as usize];
 	}
-	self.pc += 2;
     }
 
     pub fn load_game(&mut self, game_dir: &str, game_name: &str)
