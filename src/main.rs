@@ -2,14 +2,13 @@ use std::time::Duration;
 mod display;
 mod chip8;
 
-const GAME_DIR: &str = "/home/nathan/Downloads/c8games/";
-const GAME_NAME: &str = "BRIX";
-
 fn main() {
-    let mut my_chip8 = chip8::Chip8::initialize();
-    let mut my_display = display::Display::initialize(GAME_NAME);
+    let game = std::env::args().nth(1).expect("Please enter a game file as an argument");
 
-    my_chip8.load_game(GAME_DIR, GAME_NAME);
+    let mut my_chip8 = chip8::Chip8::initialize();
+    let mut my_display = display::Display::initialize(&game);
+
+    my_chip8.load_game(&game);
     my_chip8.sound_state = false;
 
     // Emulation loop

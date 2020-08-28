@@ -418,8 +418,7 @@ impl Chip8 {
         }
     }
 
-    pub fn load_game(&mut self, game_dir: &str, game_name: &str) {
-        let game = game_dir.to_owned() + game_name;
+    pub fn load_game(&mut self, game: &String) {
         let buffer = fs::read(game).expect("File read error");
 
         // 512 == 0x200
@@ -431,6 +430,5 @@ impl Chip8 {
             println!("Error: ROM too big");
             std::process::exit(1);
         }
-        println!("Loaded {}", game_name);
     }
 }
