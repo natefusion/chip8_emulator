@@ -15,6 +15,7 @@ use std::fs;
  */
 
 pub struct Chip8 {
+    // Function pointer arrays for opcodes
     t_main: [fn(&mut Chip8, &Bit); 16],
     t_0000: [fn(&mut Chip8, &Bit); 15],
     t_8000: [fn(&mut Chip8, &Bit); 15],
@@ -23,17 +24,29 @@ pub struct Chip8 {
 
     opcode: u16,
     memory: [u8; 4096],
+
+    // Cpu registers, v[0xF] for 'carry flag'
     v: [u8; 16],
+
+    // Index register 
     i: u16,
+    
+    // Program counter
     pc: u16,
+    // Sets the value to increment the program counter by
     pc_inc: u16,
-    pub gfx: [[u8; 64]; 32],
+    
     delay_timer: u8,
     sound_timer: u8,
+    
     stack: [u16; 16],
     sp: u16,
-    pub key: [u8; 16],
+    
     fontset: [u8; 80],
+    
+    pub gfx: [[u8; 64]; 32],
+    // Holds keyboard state
+    pub key: [bool; 16],
     pub draw_flag: bool,
     pub sound_state: bool,
 }
@@ -100,7 +113,7 @@ impl Chip8 {
 
             delay_timer: 0,
             sound_timer: 0,
-            key: [0; 16],
+            key: [false; 16],
             draw_flag: false,
             sound_state: true,
 
@@ -269,22 +282,15 @@ impl Chip8 {
     }
     // Sets VX = VX + VY, set VF = carry
     fn i_8XY4(&mut self, bit: &Bit) {
-        let vxy = (self.v[bit.x].wrapping_add(self.v[bit.y])) as u16;
-        if vxy > 255 {
-            self.v[0xF] = 1;
-        } else {
-            self.v[0xF] = 0;
-        }
-        self.v[bit.x] = (vxy & 0x00FF) as u8;
+	let vxy = self.v[bit.x] as u16 + self.v[bit.y] as u16;
+	self.v[0xF] = (vxy >> 8) as u8; // if VX+VY > 255, then VF = 1, else VF = 0
+        self.v[bit.x] = vxy as u8;
     }
     // Set VX -= VY. set VF = NOT borrow
     fn i_8XY5(&mut self, bit: &Bit) {
-        if self.v[bit.x] > self.v[bit.y] {
-            self.v[0xF] = 1;
-        } else {
-            self.v[0xF] = 0;
-        }
-        self.v[bit.x] = self.v[bit.x].wrapping_sub(self.v[bit.y]);
+	let vxy = self.v[bit.x] as i16 - self.v[bit.y] as i16;
+	self.v[0xF] = (vxy >> 8 >= 0) as u8; // If VX > VY, then VF = 0, else VF = 1
+        self.v[bit.x] = vxy as u8; // Should I wrap? IDK
     }
     // Set VX = VX SHR 1
     fn i_8XY6(&mut self, bit: &Bit) {
@@ -293,12 +299,9 @@ impl Chip8 {
     }
     // Set VX = VY - VX. set VF = NOT borrow
     fn i_8XY7(&mut self, bit: &Bit) {
-        if self.v[bit.y] > self.v[bit.x] {
-            self.v[0xF] = 1;
-        } else {
-            self.v[0xF] = 0;
-        }
-        self.v[bit.x] = self.v[bit.y] - self.v[bit.x];
+	let vxy = self.v[bit.y] as i16 - self.v[bit.x] as i16;
+	self.v[0xF] = (vxy >> 8 >= 0) as u8; // If VY > VX, then VF = 0, else VF = 1
+        self.v[bit.x] = vxy as u8; // Should I wrap? IDK
     }
     // Set VX = VX SHL 1
     fn i_8XYE(&mut self, bit: &Bit) {
@@ -357,13 +360,13 @@ impl Chip8 {
     }
     // Skip next instruction if key with the value of VX is pressed
     fn i_EX9E(&mut self, bit: &Bit) {
-        if self.key[self.v[bit.x] as usize] != 0 {
+        if self.key[self.v[bit.x] as usize] {
             self.pc_inc = 4;
         }
     }
     // Skip next instruction if key with the value of VX is not pressed
     fn i_EXA1(&mut self, bit: &Bit) {
-        if self.key[self.v[bit.x] as usize] == 0 {
+        if !self.key[self.v[bit.x] as usize] {
             self.pc_inc = 4;
         }
     }
@@ -371,12 +374,12 @@ impl Chip8 {
     fn i_FX07(&mut self, bit: &Bit) {
         self.v[bit.x] = self.delay_timer;
     }
-    // Wait for a key press, store the avlue of the key in VX
+    // Wait for a key press, store the value of the key in VX
     fn i_FX0A(&mut self, bit: &Bit) {
         'key: loop {
             for val in self.key.iter() {
-                if *val == 1 {
-                    self.v[bit.x] = *val;
+                if *val {
+                    self.v[bit.x] = *val as u8;
                     break 'key;
                 }
             }
