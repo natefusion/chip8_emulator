@@ -33,8 +33,6 @@ pub struct Chip8 {
     
     // Program counter
     pc: u16,
-    // Sets the value to increment the program counter by
-    pc_inc: u16,
     
     delay_timer: u8,
     sound_timer: u8,
@@ -101,7 +99,6 @@ impl Chip8 {
             },
 
             pc: 0x200,
-            pc_inc: 2,
             opcode: 0,
             i: 0,
             sp: 0,
@@ -149,6 +146,7 @@ impl Chip8 {
         let op1 = (self.memory[self.pc as usize]) as u16;
         let op2 = (self.memory[1 + self.pc as usize]) as u16;
         self.opcode = op1 << 8 | op2;
+	self.pc += 2;
     }
 
     pub fn emulate_cycle(&mut self) {
@@ -175,9 +173,6 @@ impl Chip8 {
             }
             self.sound_timer -= 1;
         }
-
-        self.pc += self.pc_inc;
-        self.pc_inc = 2;
     }
 
     // Instructions
@@ -229,31 +224,29 @@ impl Chip8 {
     // Jump to location NNN
     fn i_1NNN(&mut self, bit: &Bit) {
         self.pc = bit.nnn;
-        self.pc_inc = 0;
     }
     // Execute subroutine starting at NNN
     fn i_2NNN(&mut self, bit: &Bit) {
         self.sp += 1;
         self.stack[self.sp as usize] = self.pc;
         self.pc = bit.nnn;
-        self.pc_inc = 0;
     }
     // Skip next instruction if VX == KK
     fn i_3XKK(&mut self, bit: &Bit) {
         if self.v[bit.x] == bit.kk {
-            self.pc_inc = 4;
+	    self.pc += 2;
         }
     }
     // Skip next instruction if VX != KK
     fn i_4XKK(&mut self, bit: &Bit) {
         if self.v[bit.x] != bit.kk {
-            self.pc_inc = 4;
+	    self.pc += 2;
         }
     }
     // Skip next instruction if VX == VY
     fn i_5XY0(&mut self, bit: &Bit) {
         if self.v[bit.x] == self.v[bit.y] {
-            self.pc_inc = 4;
+	    self.pc += 2;
         }
     }
     // Set VX == KK
@@ -295,7 +288,7 @@ impl Chip8 {
     // Set VX = VX SHR 1
     fn i_8XY6(&mut self, bit: &Bit) {
         self.v[0xF] = self.v[bit.x] & 1;
-        self.v[bit.x] /= 2;
+        self.v[bit.x] >>= 1;
     }
     // Set VX = VY - VX. set VF = NOT borrow
     fn i_8XY7(&mut self, bit: &Bit) {
@@ -306,12 +299,12 @@ impl Chip8 {
     // Set VX = VX SHL 1
     fn i_8XYE(&mut self, bit: &Bit) {
         self.v[0xF] = self.v[bit.x] >> 7;
-        self.v[bit.x] *= 2;
+        self.v[bit.x] <<= 1;
     }
     // Skip next instruction if VX != VY
     fn i_9XY0(&mut self, bit: &Bit) {
         if self.v[bit.x] != self.v[bit.y] {
-            self.pc_inc = 4;
+	    self.pc += 2;
         }
     }
     // Store memory address NNN in register I
@@ -321,7 +314,6 @@ impl Chip8 {
     // Jump to location NNN + V0
     fn i_BNNN(&mut self, bit: &Bit) {
         self.pc = bit.nnn + self.v[0] as u16;
-        self.pc_inc = 0;
     }
     // Set VX = random byte AND KK
     fn i_CXKK(&mut self, bit: &Bit) {
@@ -361,13 +353,14 @@ impl Chip8 {
     // Skip next instruction if key with the value of VX is pressed
     fn i_EX9E(&mut self, bit: &Bit) {
         if self.key[self.v[bit.x] as usize] {
-            self.pc_inc = 4;
+	    self.pc += 2;
         }
     }
     // Skip next instruction if key with the value of VX is not pressed
     fn i_EXA1(&mut self, bit: &Bit) {
         if !self.key[self.v[bit.x] as usize] {
-            self.pc_inc = 4;
+	    self.pc += 2;
+
         }
     }
     // Set VX = delay timer value
