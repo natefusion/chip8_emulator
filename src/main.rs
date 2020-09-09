@@ -18,6 +18,9 @@ fn main() {
 	    my_display.draw_frame(&my_chip8);
 	}
         if my_display.handle_events(&mut my_chip8) { break; }
-        std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 300));
+
+	// Remove this and instead count delay timer down at 60hz in the future
+	//let duration = duration::from_millis(16.67);
+        std::thread::sleep(Duration::from_micros(16667));
     }
 }

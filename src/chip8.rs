@@ -36,7 +36,7 @@ pub struct Chip8 {
     
     delay_timer: u8,
     sound_timer: u8,
-    
+      
     stack: [u16; 16],
     sp: u16,
     
@@ -44,7 +44,7 @@ pub struct Chip8 {
     
     pub gfx: [[u8; 64]; 32],
     // Holds keyboard state
-    pub key: [bool; 16],
+    pub key: [u8; 16],
     pub draw_flag: bool,
     pub sound_state: bool,
 }
@@ -110,7 +110,7 @@ impl Chip8 {
 
             delay_timer: 0,
             sound_timer: 0,
-            key: [false; 16],
+            key: [0; 16],
             draw_flag: false,
             sound_state: true,
 
@@ -163,16 +163,16 @@ impl Chip8 {
         self.t_main[((self.opcode & 0xF000) >> 12) as usize](self, bit);
 
         // Update timers
-        if self.delay_timer > 0 {
-            self.delay_timer -= 1;
-        }
-
-        if self.sound_timer > 0 {
-            if self.sound_timer == 1 && self.sound_state {
-                println!("PRETEND THIS IS A SOUND");
-            }
-            self.sound_timer -= 1;
-        }
+	if self.sound_timer > 0 {
+	    self.sound_timer -= 1;
+	    if self.sound_state {
+		println!("PING");
+	    }
+	}
+	
+	if self.delay_timer > 0 {
+	    self.delay_timer -= 1;
+	}
     }
 
     // Instructions
@@ -255,7 +255,7 @@ impl Chip8 {
     }
     // Set VX += KK
     fn i_7XKK(&mut self, bit: Bit) {
-        self.v[bit.x] = self.v[bit.x].wrapping_add(bit.kk);
+	self.v[bit.x] += bit.kk as u8;
     }
     // Set VX = VY
     fn i_8XY0(&mut self, bit: Bit) {
@@ -341,9 +341,7 @@ impl Chip8 {
                     if row > gfx_r { row = gfx_r; }
                     if col > gfx_c { col = gfx_c; }
 
-                    if self.gfx[row][col] == 1 { 
-                        self.v[0xF] = 1;
-                    }
+                    self.v[0xF] = self.gfx[row][col];
                     self.gfx[row][col] ^= 1;
                 }
             }
@@ -352,16 +350,15 @@ impl Chip8 {
     }
     // Skip next instruction if key with the value of VX is pressed
     fn i_EX9E(&mut self, bit: Bit) {
-        if self.key[self.v[bit.x] as usize] {
+	if self.key[self.v[bit.x] as usize] == 1 {
 	    self.pc += 2;
-        }
+	}
     }
     // Skip next instruction if key with the value of VX is not pressed
     fn i_EXA1(&mut self, bit: Bit) {
-        if !self.key[self.v[bit.x] as usize] {
+	if self.key[self.v[bit.x] as usize] == 0 {
 	    self.pc += 2;
-
-        }
+	}
     }
     // Set VX = delay timer value
     fn i_FX07(&mut self, bit: Bit) {
@@ -371,8 +368,8 @@ impl Chip8 {
     fn i_FX0A(&mut self, bit: Bit) {
         'key: loop {
             for val in self.key.iter() {
-                if *val {
-                    self.v[bit.x] = *val as u8;
+                if *val == 1 {
+                    self.v[bit.x] = *val;
                     break 'key;
                 }
             }
