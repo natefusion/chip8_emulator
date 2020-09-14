@@ -288,7 +288,7 @@ impl Chip8 {
     // Set VX = VX SHR 1
     fn i_8XY6(&mut self, bit: Bit) {
         self.v[0xF] = self.v[bit.x] & 1;
-        self.v[bit.x] >>= 1;
+        self.v[bit.x] = self.v[bit.y] >> 1;
     }
     // Set VX = VY - VX. set VF = NOT borrow
     fn i_8XY7(&mut self, bit: Bit) {
@@ -299,7 +299,7 @@ impl Chip8 {
     // Set VX = VX SHL 1
     fn i_8XYE(&mut self, bit: Bit) {
         self.v[0xF] = self.v[bit.x] >> 7;
-        self.v[bit.x] <<= 1;
+        self.v[bit.x] = self.v[bit.y] << 1;
     }
     // Skip next instruction if VX != VY
     fn i_9XY0(&mut self, bit: Bit) {
