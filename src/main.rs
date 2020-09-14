@@ -21,6 +21,6 @@ fn main() {
 
 	// Remove this and instead count delay timer down at 60hz in the future
 	//let duration = duration::from_millis(16.67);
-        std::thread::sleep(Duration::from_micros(16667));
+        std::thread::sleep(Duration::from_micros(7000));
     }
 }

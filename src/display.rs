@@ -52,47 +52,49 @@ impl Display {
 	}
 	self.canvas.present();
     }
+
+    fn set_key(key: Keycode, pressed: u8, my_chip8: &mut Chip8) {
+	let i = match key {
+	    Keycode::Num1 => 0x1,
+            Keycode::Num2 => 0x2,
+            Keycode::Num3 => 0x3,
+            Keycode::Num4 => 0xC,
+            Keycode::Q => 0x4,
+            Keycode::W => 0x5,
+            Keycode::E => 0x6,
+            Keycode::R => 0xD,
+            Keycode::A => 0x7,
+            Keycode::S => 0x8,
+            Keycode::D => 0x9,
+            Keycode::F => 0xE,
+            Keycode::Z => 0xA,
+            Keycode::X => 0x0,
+            Keycode::C => 0xB,
+            Keycode::V => 0xF,
+	    _=> return,
+	};
+	my_chip8.key[i] = pressed;
+    }
     
     pub fn handle_events(&mut self, my_chip8: &mut Chip8) -> bool {
 	let mut exit = false;
 	for event in self.event_pump.poll_iter() {
 	    match event {
-		Event::Quit {..}
-		| Event::KeyDown { keycode: Some(Keycode::Escape),..} => exit = true,
+		Event::Quit { .. } => exit = true,
 
-		Event::KeyDown { keycode: Some(Keycode::Num1),..} => my_chip8.key[0]  = 1,
-		Event::KeyDown { keycode: Some(Keycode::Num2),..} => my_chip8.key[1]  = 1,
-		Event::KeyDown { keycode: Some(Keycode::Num3),..} => my_chip8.key[2]  = 1,
-		Event::KeyDown { keycode: Some(Keycode::Num4),..} => my_chip8.key[3]  = 1,
-		Event::KeyDown { keycode: Some(Keycode::Q),..}    => my_chip8.key[4]  = 1,
-		Event::KeyDown { keycode: Some(Keycode::W),..}    => my_chip8.key[5]  = 1,
-		Event::KeyDown { keycode: Some(Keycode::E),..}    => my_chip8.key[6]  = 1,
-		Event::KeyDown { keycode: Some(Keycode::R),..}    => my_chip8.key[7]  = 1,
-		Event::KeyDown { keycode: Some(Keycode::A),..}    => my_chip8.key[8]  = 1,
-		Event::KeyDown { keycode: Some(Keycode::S),..}    => my_chip8.key[9]  = 1,
-		Event::KeyDown { keycode: Some(Keycode::D),..}    => my_chip8.key[10] = 1,
-		Event::KeyDown { keycode: Some(Keycode::F),..}    => my_chip8.key[11] = 1,
-		Event::KeyDown { keycode: Some(Keycode::Z),..}    => my_chip8.key[12] = 1,
-		Event::KeyDown { keycode: Some(Keycode::X),..}    => my_chip8.key[13] = 1,
-		Event::KeyDown { keycode: Some(Keycode::C),..}    => my_chip8.key[14] = 1,
-		Event::KeyDown { keycode: Some(Keycode::V),..}    => my_chip8.key[15] = 1,
+		// Maybe do some refactoring of this code
+		Event::KeyDown { keycode, .. } => {
+		    if let Some(key) = keycode {
+			Display::set_key(key, 1, my_chip8);
+		    }
+		}
+
+		Event::KeyUp { keycode, .. } => {
+		    if let Some(key) = keycode {
+			Display::set_key(key, 0, my_chip8);
+		    }
+		}
 		
-		Event::KeyUp { keycode: Some(Keycode::Num1),..} => my_chip8.key[0]  = 0,
-		Event::KeyUp { keycode: Some(Keycode::Num2),..} => my_chip8.key[1]  = 0,
-		Event::KeyUp { keycode: Some(Keycode::Num3),..} => my_chip8.key[2]  = 0,
-		Event::KeyUp { keycode: Some(Keycode::Num4),..} => my_chip8.key[3]  = 0,
-		Event::KeyUp { keycode: Some(Keycode::Q),..}    => my_chip8.key[4]  = 0,
-		Event::KeyUp { keycode: Some(Keycode::W),..}    => my_chip8.key[5]  = 0,
-		Event::KeyUp { keycode: Some(Keycode::E),..}    => my_chip8.key[6]  = 0,
-		Event::KeyUp { keycode: Some(Keycode::R),..}    => my_chip8.key[7]  = 0,
-		Event::KeyUp { keycode: Some(Keycode::A),..}    => my_chip8.key[8]  = 0,
-		Event::KeyUp { keycode: Some(Keycode::S),..}    => my_chip8.key[9]  = 0,
-		Event::KeyUp { keycode: Some(Keycode::D),..}    => my_chip8.key[10] = 0,
-		Event::KeyUp { keycode: Some(Keycode::F),..}    => my_chip8.key[11] = 0,
-		Event::KeyUp { keycode: Some(Keycode::Z),..}    => my_chip8.key[12] = 0,
-		Event::KeyUp { keycode: Some(Keycode::X),..}    => my_chip8.key[13] = 0,
-		Event::KeyUp { keycode: Some(Keycode::C),..}    => my_chip8.key[14] = 0,
-		Event::KeyUp { keycode: Some(Keycode::V),..}    => my_chip8.key[15] = 0,
 		_ => ()
 	    }
 	}
