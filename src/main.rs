@@ -1,9 +1,15 @@
-use std::time::Duration;
+use std::{time::Duration,thread::sleep,process,env};
 mod chip8sdl;
 mod chip8;
 
 fn main() {
-    let game = std::env::args().nth(1).expect("Please enter a game file as an argument");
+    let game = match env::args().nth(1) {   
+        Some(game) => game,
+        _ => {
+            println!("Error, please enter a game file as an argument");
+            process::exit(1);
+        },
+    };
 
     let mut my_chip8 = chip8::Chip8::initialize();
     let mut my_chip8sdl = chip8sdl::Chip8SDL::initialize(&game);
@@ -18,6 +24,6 @@ fn main() {
             my_chip8sdl.draw_frame(&my_chip8);
         }
         if my_chip8sdl.handle_events(&mut my_chip8) { break; }
-        std::thread::sleep(Duration::from_micros(7000));
+        sleep(Duration::from_micros(7000));
     }
 }
