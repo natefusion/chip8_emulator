@@ -30,10 +30,7 @@ impl Chip8SDL {
             .build()
             .unwrap();
         
-        Chip8SDL {
-            event_pump,
-            canvas,
-        }
+        Chip8SDL { event_pump, canvas }
     }
     
     pub fn draw_frame(&mut self, my_chip8: &Chip8) {
@@ -43,9 +40,9 @@ impl Chip8SDL {
         
         for (y, i) in my_chip8.gfx.iter().enumerate() {
             for (x, val) in i.iter().enumerate() {
-                let x = (x as u32 * SCALE) as i32;
-                let y = (y as u32 * SCALE) as i32;
                 if *val == 1 {
+                    let x = (x as u32 * SCALE) as i32;
+                    let y = (y as u32 * SCALE) as i32;
                     self.canvas.fill_rect(Rect::new(x, y, SCALE, SCALE)).unwrap();
                 }
             }
@@ -78,7 +75,6 @@ impl Chip8SDL {
                     }
                 ] = key_state;
             }
-            
         }
         
         false
