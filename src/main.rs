@@ -5,7 +5,7 @@ mod chip8;
 fn main() {
     let game = match env::args().nth(1) {   
         Some(game) => game,
-        _ => {
+        _=> {
             println!("Error, please enter a game file as an argument");
             process::exit(1);
         },

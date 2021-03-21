@@ -53,51 +53,34 @@ impl Chip8SDL {
         self.canvas.present();
     }
     
-    fn set_key(key: Keycode, pressed: u8, my_chip8: &mut Chip8) {
-        let i = match key {
-            Keycode::Num1 => 0x1,
-            Keycode::Num2 => 0x2,
-            Keycode::Num3 => 0x3,
-            Keycode::Num4 => 0xC,
-            Keycode::Q => 0x4,
-            Keycode::W => 0x5,
-            Keycode::E => 0x6,
-            Keycode::R => 0xD,
-            Keycode::A => 0x7,
-            Keycode::S => 0x8,
-            Keycode::D => 0x9,
-            Keycode::F => 0xE,
-            Keycode::Z => 0xA,
-            Keycode::X => 0x0,
-            Keycode::C => 0xB,
-            Keycode::V => 0xF,
-            _=> return,
-        };
-        my_chip8.key[i] = pressed;
-    }
-    
     pub fn handle_events(&mut self, my_chip8: &mut Chip8) -> bool {
-        let mut exit = false;
         for event in self.event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. } => exit = true,
-                
-                // Maybe do some refactoring of this code
-                Event::KeyDown { keycode, .. } => {
-                    if let Some(key) = keycode {
-                        Chip8SDL::set_key(key, 1, my_chip8);
+            if let Event::Quit { .. } = event { return true; }
+            
+            let (key_state, keycode) = match event {
+                Event::KeyDown { keycode, .. } => (1, keycode),
+                Event::KeyUp   { keycode, .. } => (0, keycode),
+                _=> (0, None),
+            };
+
+            if let Some(key) = keycode {
+                my_chip8.key[
+                    match key {
+                        Keycode::Num1 => 0x1, Keycode::Num2 => 0x2,
+                        Keycode::Num3 => 0x3, Keycode::Num4 => 0xC,
+                        Keycode::Q => 0x4,    Keycode::W => 0x5,
+                        Keycode::E => 0x6,    Keycode::R => 0xD,
+                        Keycode::A => 0x7,    Keycode::S => 0x8,
+                        Keycode::D => 0x9,    Keycode::F => 0xE,
+                        Keycode::Z => 0xA,    Keycode::X => 0x0,
+                        Keycode::C => 0xB,    Keycode::V => 0xF,
+                        _=> break,
                     }
-                }
-                
-                Event::KeyUp { keycode, .. } => {
-                    if let Some(key) = keycode {
-                        Chip8SDL::set_key(key, 0, my_chip8);
-                    }
-                }
-                
-                _ => ()
+                ] = key_state;
             }
+            
         }
-        exit
+        
+        false
     }
 }

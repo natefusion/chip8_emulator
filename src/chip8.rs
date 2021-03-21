@@ -1,11 +1,9 @@
 #![allow(non_camel_case_types, non_snake_case)]
 use rand::Rng;
-use std::fs;
+use std::{fs,process};
 
 /* Materials:
  * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
- * https://github.com/mattmikolay/chip-8/wiki/CHIP%E2%80%908-Technical-Reference
- * http://mattmik.com/files/chip8/mastering/chip8.html
  * http://www.multigesture.net/articles/how-to-write-an-emulator-chip-8-interpreter/
  *
  * System memory map:
@@ -60,43 +58,35 @@ struct Bit {
 impl Chip8 {
     pub fn initialize() -> Chip8 {
         let mut chip = Chip8 {
-            t_main: {
-                [
+            t_main: {[
                     Chip8::i_0000, Chip8::i_1NNN, Chip8::i_2NNN, Chip8::i_3XKK,
                     Chip8::i_4XKK, Chip8::i_5XY0, Chip8::i_6XKK, Chip8::i_7XKK,
                     Chip8::i_8000, Chip8::i_9XY0, Chip8::i_ANNN, Chip8::i_BNNN,
                     Chip8::i_CXKK, Chip8::i_DXYN, Chip8::i_E000, Chip8::i_F000,
-                ]
-            },
+            ]},
 
-            t_0000: {
-                [
+            t_0000: {[
                     Chip8::i_00E0, Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL,
                     Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL,
                     Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL,
                     Chip8::i_NULL, Chip8::i_NULL, Chip8::i_00EE,
-                ]
-            },
+            ]},
 
-            t_8000: {
-                [
+            t_8000: {[
                     Chip8::i_8XY0, Chip8::i_8XY1, Chip8::i_8XY2,
                     Chip8::i_8XY3, Chip8::i_8XY4, Chip8::i_8XY5,
                     Chip8::i_8XY6, Chip8::i_8XY7, Chip8::i_NULL,
                     Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL,
                     Chip8::i_NULL, Chip8::i_NULL, Chip8::i_8XYE,
-                ]
-            },
+            ]},
 
-            t_E000: { [Chip8::i_EX9E, Chip8::i_NULL, Chip8::i_NULL, Chip8::i_EXA1] },
+            t_E000: {[Chip8::i_EX9E, Chip8::i_NULL, Chip8::i_NULL, Chip8::i_EXA1]},
 
-            t_F000: {
-                [
+            t_F000: {[
                     Chip8::i_FX07, Chip8::i_FX0A, Chip8::i_FX15,
                     Chip8::i_FX18, Chip8::i_FX1E, Chip8::i_FX29,
                     Chip8::i_FX33, Chip8::i_FX55, Chip8::i_FX65,
-                ]
-            },
+            ]},
 
             pc: 0x200,
             opcode: 0,
@@ -114,8 +104,7 @@ impl Chip8 {
             draw_flag: false,
             sound_state: true,
 
-            fontset: {
-                [
+            fontset: {[
                     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
                     0x20, 0x60, 0x20, 0x20, 0x70, // 1
                     0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -132,8 +121,7 @@ impl Chip8 {
                     0xE0, 0x90, 0x90, 0x90, 0xE0, // D
                     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
                     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
-                ]
-            },
+            ]},
         };
 
         for (i, val) in chip.fontset.iter().enumerate() {
@@ -178,33 +166,38 @@ impl Chip8 {
     // Instructions
 
     fn i_0000(&mut self, bit: &Bit) {
-        self.t_0000[(self.opcode & 0x000F) as usize](self, bit);
+        self.t_0000[bit.n as usize](self, bit);
     }
     fn i_8000(&mut self, bit: &Bit) {
-        self.t_8000[(self.opcode & 0x000F) as usize](self, bit);
+        self.t_8000[bit.n as usize](self, bit);
     }
     fn i_E000(&mut self, bit: &Bit) {
-        self.t_E000[(self.opcode & 0x00FF) as usize - 158](self, bit);
+        self.t_E000[bit.kk as usize - 158](self, bit);
     }
 
     fn i_F000(&mut self, bit: &Bit) {
-        match self.opcode & 0x00FF {
-            0x007 => self.t_F000[0](self, bit),
-            0x00A => self.t_F000[1](self, bit),
-            0x015 => self.t_F000[2](self, bit),
-            0x018 => self.t_F000[3](self, bit),
-            0x01E => self.t_F000[4](self, bit),
-            0x029 => self.t_F000[5](self, bit),
-            0x033 => self.t_F000[6](self, bit),
-            0x055 => self.t_F000[7](self, bit),
-            0x065 => self.t_F000[8](self, bit),
-            _ => self.i_NULL(bit),
-        }
+        let x = match bit.kk {
+            0x007 => 0,
+            0x00A => 1,
+            0x015 => 2,
+            0x018 => 3,
+            0x01E => 4,
+            0x029 => 5,
+            0x033 => 6,
+            0x055 => 7,
+            0x065 => 8,
+            _=> {
+                self.i_NULL(bit);
+                return;
+            },
+        };
+
+        self.t_F000[x](self, bit);
     }
 
     fn i_NULL(&mut self, _bit: &Bit) {
         println!("Invalid opcode: {} (raw opcode)", self.opcode);
-        std::process::exit(1);
+        process::exit(1);
     }
 
     // Clears the screen
@@ -412,7 +405,13 @@ impl Chip8 {
     }
 
     pub fn load_game(&mut self, game: &String) {
-        let buffer = fs::read(game).expect("File read error");
+        let buffer = match fs::read(game) {
+            Ok(file) => file,
+            Err(_) => {
+                println!("Error: File read error");
+                process::exit(1);
+            },
+        };
 
         // 512 == 0x200
         if 4096 - 512 > buffer.len() {
@@ -421,7 +420,7 @@ impl Chip8 {
             }
         } else {
             println!("Error: ROM too big");
-            std::process::exit(1);
+            process::exit(1);
         }
     }
 }
