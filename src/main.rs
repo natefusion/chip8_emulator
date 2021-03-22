@@ -20,10 +20,23 @@ fn main() {
     // Emulation loop
     loop {
         my_chip8.emulate_cycle();
-        if my_chip8.draw_flag {
-            my_chip8sdl.draw_frame(&my_chip8);
-        }
-        if my_chip8sdl.handle_events(&mut my_chip8) { break; }
-        sleep(Duration::from_micros(7000));
+        if my_chip8.draw_flag { my_chip8sdl.draw_frame(&my_chip8.gfx); }
+        //my_chip8.draw_flag = false;
+        
+        //draw_frame(&my_chip8.gfx);
+
+        if my_chip8sdl.handle_events(&mut my_chip8.key) { break; }
+        sleep(Duration::from_micros(3000));
     }
+}
+
+fn draw_frame(gfx: &[u8]) {
+    for (i, val) in gfx.iter().enumerate() {
+        if i % 64 == 0 {
+            println!();
+        }
+        print!("{}",val);
+    }
+
+    println!();
 }

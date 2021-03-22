@@ -1,4 +1,3 @@
-use crate::chip8::Chip8;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
@@ -33,24 +32,26 @@ impl Chip8SDL {
         Chip8SDL { event_pump, canvas }
     }
     
-    pub fn draw_frame(&mut self, my_chip8: &Chip8) {
+    pub fn draw_frame(&mut self, gfx: &[u8]) {
         self.canvas.set_draw_color(Color::RGB(255, 255, 255));
         self.canvas.clear();
         self.canvas.set_draw_color(Color::RGB(0, 0, 0));
         
-        for (y, i) in my_chip8.gfx.iter().enumerate() {
-            for (x, val) in i.iter().enumerate() {
-                if *val == 1 {
-                    let x = (x as u32 * SCALE) as i32;
-                    let y = (y as u32 * SCALE) as i32;
-                    self.canvas.fill_rect(Rect::new(x, y, SCALE, SCALE)).unwrap();
-                }
+        for (i, val) in gfx.iter().enumerate() {
+            if *val == 1 {
+                let px = i as u32 % WIDTH;
+                let py = (i as u32 - px) / WIDTH;
+
+                let sx = (px * SCALE) as i32;
+                let sy = (py * SCALE) as i32;
+                self.canvas.fill_rect(Rect::new(sx, sy, SCALE, SCALE)).unwrap();
             }
         }
+
         self.canvas.present();
     }
     
-    pub fn handle_events(&mut self, my_chip8: &mut Chip8) -> bool {
+    pub fn handle_events(&mut self, keys: &mut [u8]) -> bool {
         for event in self.event_pump.poll_iter() {
             if let Event::Quit { .. } = event { return true; }
             
@@ -61,7 +62,7 @@ impl Chip8SDL {
             };
 
             if let Some(key) = keycode {
-                my_chip8.key[
+                keys[
                     match key {
                         Keycode::Num1 => 0x1, Keycode::Num2 => 0x2,
                         Keycode::Num3 => 0x3, Keycode::Num4 => 0xC,
