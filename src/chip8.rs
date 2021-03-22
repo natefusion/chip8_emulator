@@ -285,11 +285,9 @@ impl Chip8 {
     
     // Wait for a key press, store the position of the key in VX
     fn i_FX0A(&mut self) {
-        loop {
-            if let Some(i) = self.key.iter().position(|&val| val == 1) {
-                self.v[self.x] = i as u8;
-                return;
-            }
+        match self.key.iter().position(|&val| val == 1) {
+            Some(i) => self.v[self.x] = i as u8,
+            None => self.pc -= 2,
         }
     }
     
