@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types, non_snake_case)]
 use rand::Rng;
-use std::{fs,process};
+use std::{fs,process,time::Duration,thread::sleep};
 
 /* Materials:
  * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
@@ -12,157 +12,165 @@ use std::{fs,process};
  * 0x200-0xFFF - Program ROM and work RAM
  */
 
-pub struct Chip8 {
-    // Function pointer arrays for opcodes
-    t_main: [fn(&mut Chip8); 16],
-    t_0000: [fn(&mut Chip8); 15],
-    t_8000: [fn(&mut Chip8); 15],
-    t_E000: [fn(&mut Chip8); 4],
-    t_F000: [fn(&mut Chip8); 9],
+const W:     usize = 64;
+const H:     usize = 32;
+const DELAY: u64   = 16_666;
 
+pub struct Chip8 {
+    // Function pointer tables that hold a reference to all instructions    
+    t_main: [fn(&mut Self); 16],
+    t_0000: [fn(&mut Self); 2],
+    t_8000: [fn(&mut Self); 15],
+    t_E000: [fn(&mut Self); 2],
+    t_F000: [fn(&mut Self); 9],
+
+    // Caries the instruction to be executed; Each instruction is two bytes long
     opcode: u16,
+
+    /* System memory; 4096 bytes
+     * Memory map:
+     * 0x000-0x1FF - Chip 8 interpreter (contains font set in emu)
+     * 0x050-0x0A0 - Used for the builtin 4x5 pixel font set (0-F)
+     * 0x200-0xFFF - Program ROM and work RAM
+     */
     memory: [u8; 4096],
 
-    // Cpu registers, v[0xF] for 'carry flag'
+    // Cpu registers; Used for storing up to 15 different values; V[0-F] (VF for 'carry flag')
     v: [u8; 16],
 
-    // Index register 
+    // Index register; Holds a specified memory index for later use 
     i: u16,
     
-    // Program counter
+    // Program counter; for incrementing through instructions
     pc: u16,
-    
-    delay_timer: u8,
-    sound_timer: u8,
-      
-    stack: [u16; 16],
-    sp: u16,
-    
-    fontset: [u8; 80],
-    
-    pub gfx: [u8; 2048], // 64 x 32
-    // Holds keyboard state
-    pub key: [u8; 16],
-    pub draw_flag: bool,
+
+    // Delay timer; Will delay the next instruction from being executed for multiples of 1/60s
+    dt: u8,
+
+    // Sound timer; Will play a sound for multiples of 1/60s
+    st: u8,
+
+    // Turns sound on/off
     pub sound_state: bool,
 
-    // aliases for commonly used bits
-    nnn: u16,
-    nn:  u8,
-    n:   usize,
-    x:   usize,
-    y:   usize,
+    // Stack; Allows for 16 different subroutines at any one time
+    stack: [u16; 16],
+
+    // Stack pointer; for navigation through the stack
+    sp: u16,
+
+    // Screen is 64px by 32px
+    pub gfx: [u8; W*H],
+
+    // The display will only be updated when this is true
+    pub draw_flag: bool,
+    
+    // Holds keyboard state; 16 keys available
+    pub keys: [u8; 16],
+
+    // Aliases for currently used values
+    nnn: u16,   // address; 12-bit value              
+    nn:  u8,    // byte;    8-bit value               
+    n:   usize, // nibble;  4-bit value             
+    x:   usize, // nibble: lower 4 bits of the high byte
+    y:   usize, // nibble: upper 4 bits of the low byte 
 }
 
 impl Chip8 {
-    pub fn initialize() -> Chip8 {
-        let mut chip = Chip8 {
-            t_main: {[
-                    Chip8::i_0000, Chip8::i_1NNN, Chip8::i_2NNN, Chip8::i_3XNN,
-                    Chip8::i_4XNN, Chip8::i_5XY0, Chip8::i_6XNN, Chip8::i_7XNN,
-                    Chip8::i_8000, Chip8::i_9XY0, Chip8::i_ANNN, Chip8::i_BNNN,
-                    Chip8::i_CXNN, Chip8::i_DXYN, Chip8::i_E000, Chip8::i_F000,
-            ]},
+    pub fn initialize() -> Self {
+        let mut chip = Self {
+            t_main: [Self::i_0000, Self::i_1NNN, Self::i_2NNN, Self::i_3XNN, Self::i_4XNN,
+                     Self::i_5XY0, Self::i_6XNN, Self::i_7XNN, Self::i_8000, Self::i_9XY0,
+                     Self::i_ANNN, Self::i_BNNN, Self::i_CXNN, Self::i_DXYN, Self::i_E000, Self::i_F000],
+            
+            t_0000: [Self::i_00E0, Self::i_00EE],
+            
+            t_8000: [Self::i_8XY0, Self::i_8XY1, Self::i_8XY2, Self::i_8XY3, Self::i_8XY4,
+                     Self::i_8XY5, Self::i_8XY6, Self::i_8XY7, Self::i_NULL, Self::i_NULL,
+                     Self::i_NULL, Self::i_NULL, Self::i_NULL, Self::i_NULL, Self::i_8XYE],
+            
+            t_E000: [Self::i_EX9E, Self::i_EXA1],
+            
+            t_F000: [Self::i_FX07, Self::i_FX0A, Self::i_FX15, Self::i_FX18, Self::i_FX1E,
+                     Self::i_FX29, Self::i_FX33, Self::i_FX55, Self::i_FX65],
 
-            t_0000: {[
-                    Chip8::i_00E0, Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL,
-                    Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL,
-                    Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL,
-                    Chip8::i_NULL, Chip8::i_NULL, Chip8::i_00EE,
-            ]},
-
-            t_8000: {[
-                    Chip8::i_8XY0, Chip8::i_8XY1, Chip8::i_8XY2,
-                    Chip8::i_8XY3, Chip8::i_8XY4, Chip8::i_8XY5,
-                    Chip8::i_8XY6, Chip8::i_8XY7, Chip8::i_NULL,
-                    Chip8::i_NULL, Chip8::i_NULL, Chip8::i_NULL,
-                    Chip8::i_NULL, Chip8::i_NULL, Chip8::i_8XYE,
-            ]},
-
-            t_E000: {[Chip8::i_EX9E, Chip8::i_NULL, Chip8::i_NULL, Chip8::i_EXA1]},
-
-            t_F000: {[
-                    Chip8::i_FX07, Chip8::i_FX0A, Chip8::i_FX15,
-                    Chip8::i_FX18, Chip8::i_FX1E, Chip8::i_FX29,
-                    Chip8::i_FX33, Chip8::i_FX55, Chip8::i_FX65,
-            ]},
-
-            pc: 0x200,
             opcode: 0,
-            i: 0,
-            sp: 0,
-
-            gfx: [0; 2048],
-            stack: [0; 16],
-            v: [0; 16],
             memory: [0; 4096],
-
-            delay_timer: 0,
-            sound_timer: 0,
-            key: [0; 16],
-            draw_flag: false,
+            v: [0; 16],
+            i: 0,
+            pc: 0x200, // programs are loaded at memory[0x200]
+            dt: 0,
+            st: 0,
             sound_state: true,
-
+            stack: [0; 16],
+            sp: 0,
+            gfx: [0; W*H],
+            draw_flag: false,            
+            keys: [0; 16],
             nnn: 0,
             nn:  0,
             n:   0,
             x:   0,
             y:   0,
-
-            fontset: {[
-                    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-                    0x20, 0x60, 0x20, 0x20, 0x70, // 1
-                    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-                    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-                    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-                    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-                    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-                    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-                    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-                    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-                    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-                    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-                    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-                    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-                    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-                    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
-            ]},
         };
+        
+        let fontset = [
+            0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+            0x20, 0x60, 0x20, 0x20, 0x70, // 1
+            0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+            0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+            0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+            0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+            0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+            0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+            0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+            0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+            0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+            0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+            0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+            0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+            0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+            0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+        ];
 
-        for (i, val) in chip.fontset.iter().enumerate() {
+        for (i, val) in fontset.iter().enumerate() {
             chip.memory[i] = *val;
         }
         chip
     }
 
     pub fn emulate_cycle(&mut self) {
-        let op1 = (self.memory[self.pc as usize]) as u16;
-        let op2 = (self.memory[1 + self.pc as usize]) as u16;
+        self.draw_flag = false;
+        let op1 = self.memory[self.pc as usize] as u16;
+        let op2 = self.memory[self.pc as usize + 1] as u16;
         self.opcode = op1 << 8 | op2;
         self.pc += 2;
 
-        self.nnn =  (self.opcode & 0x0FFF)       as u16;   // addr; 12-bit value
-        self.nn  =  (self.opcode & 0x00FF)       as u8;    // byte; 8-bit value
-        self.n   =  (self.opcode & 0x000F)       as usize; // nibble; 4-bit value
-        self.x   = ((self.opcode & 0x0F00) >> 8) as usize; // lower 4 bits of the high byte
-        self.y   = ((self.opcode & 0x00F0) >> 4) as usize; // upper 4 bits of the low byte
+        self.nnn =  (self.opcode & 0xFFF)       as u16;   // addr; 12-bit value
+        self.nn  =  (self.opcode & 0xFF)        as u8;    // byte; 8-bit value
+        self.n   =  (self.opcode & 0xF)         as usize; // nibble; 4-bit value
+        self.x   = ((self.opcode & 0xF00) >> 8) as usize; // lower 4 bits of the high byte
+        self.y   = ((self.opcode & 0xF0) >> 4)  as usize; // upper 4 bits of the low byte
 
         self.t_main[((self.opcode & 0xF000) >> 12) as usize](self);
 
         // Update timers
-        if self.sound_state && self.sound_timer > 0 {
-            self.sound_timer -= 1;
+        if self.sound_state && self.st > 0 {
+            self.st -= 1;
             println!("PING");
         }
 
-        if self.delay_timer > 0 { self.delay_timer -= 1; }
+        if self.dt > 0 {
+            self.dt -= 1;
+            sleep(Duration::from_micros(DELAY));
+        }
     }
 
     // Instructions
 
-    fn i_0000(&mut self) { self.t_0000[self.n](self); }
-    fn i_8000(&mut self) { self.t_8000[self.n](self); }
-    fn i_E000(&mut self) { self.t_E000[self.nn as usize - 158](self); }
+    fn i_0000(&mut self) { self.t_0000[self.n >> 3](self); }
+    fn i_8000(&mut self) { self.t_8000[self.n     ](self); }
+    fn i_E000(&mut self) { self.t_E000[self.y  - 9](self); }
 
     fn i_F000(&mut self) {
         let x = match self.nn {
@@ -181,14 +189,14 @@ impl Chip8 {
     }
     
     fn i_NULL(&mut self) {
-        eprintln!("Invalid opcode: {} (raw opcode)", self.opcode);
+        eprintln!("Invalid opcode: {:X} (raw opcode)", self.opcode);
         process::exit(1);
     }
     
     // Clear the screen
     fn i_00E0(&mut self) {
-        self.gfx = [0; 2048];
-        //self.draw_flag = true;
+        self.gfx = [0; W*H];
+        self.draw_flag = true;
     }
     
     // Return from a subroutine
@@ -221,17 +229,16 @@ impl Chip8 {
     
     // Sets VX = VX + VY, set VF = carry
     fn i_8XY4(&mut self) {
-        let vxy = self.v[self.x] as u16 + self.v[self.y] as u16;
-        self.v[0xF] = (vxy >> 8) as u8; // if VX+VY > 255, then VF = 1, else VF = 0
-        self.v[self.x] = vxy as u8;
+        let sum = self.v[self.x] as u16 + self.v[self.y] as u16;
+        self.v[0xF] = (sum > 0xFF) as u8; // VF = 1 if carry occurs, 0 if not
+        self.v[self.x] = sum as u8;
     }
     
     // Set VX -= VY. set VF = NOT borrow
     fn i_8XY5(&mut self) {
-        let vxy = self.v[self.x] as i16 - self.v[self.y] as i16;
-        self.v[0xF] = (vxy >= 0) as u8; // If VX < VY, then VF = 0, else VF = 1
-        // I don't think this should be here
-        self.v[self.x] = vxy as u8; // Should I wrap? IDK
+        let diff = self.v[self.x] as i8 - self.v[self.y] as i8;
+        self.v[0xF] = (diff > 0) as u8; // If VX < VY, then VF = 0, else VF = 1
+        self.v[self.x] = diff as u8;
     }
     
     // Set VX = VX SHR 1
@@ -242,10 +249,9 @@ impl Chip8 {
     
     // Set VX = VY - VX. set VF = NOT borrow
     fn i_8XY7(&mut self) {
-        let vxy = self.v[self.y] as i16 - self.v[self.x] as i16;
-        self.v[0xF] = (vxy >= 0) as u8; // If VY < VX, then VF = 0, else VF = 1
-        // I don't think this should be here
-        //self.v[self.x] = vxy as u8; // Should I wrap? IDK
+        let diff = self.v[self.y] as i8 - self.v[self.x] as i8;
+        self.v[0xF] = (diff > 0) as u8; // If VY < VX, then VF = 0, else VF = 1
+        self.v[self.x] = diff as u8;
     }
     
     // Set VX = VY SHL 1
@@ -263,36 +269,38 @@ impl Chip8 {
     
     // Display n-byte sprite starting at memory location I at (VX,VY). Set VF = collision
     fn i_DXYN(&mut self) {
-        // sprites are always 8 pixels (1 byte) long and between 1 and 15 pixels (up to 2 bytes) high    
+        // sprites are always 8 pixels (1 byte) long and between 1 and 15 pixels (up to 2 bytes) high
         for py in 0..self.n {
             let byte = self.memory[self.i as usize + py];
             for px in 0..8 {
                 let pixel = (byte & (0x80 >> px)) >> (7 - px);
-                let position = ((self.v[self.x] as usize + px) % 64) + ((self.v[self.y] as usize + py) * 64);
-
+                let position = ((self.v[self.x] as usize + px) % W) + (((self.v[self.y] as usize + py) % H) * W);
+                
+                let oldpixel = self.gfx[position];
                 self.gfx[position] ^= pixel & 1;
-                self.v[0xF] = self.gfx[position];
+                self.v[0xF] = oldpixel ^ self.gfx[position];
+
             }
         }
         self.draw_flag = true;
     }
 
     // Skip next instruction if key with the value of VX is ...
-    fn i_EX9E(&mut self) { if self.key[self.v[self.x] as usize] == 1 { self.pc += 2; }} // pressed
-    fn i_EXA1(&mut self) { if self.key[self.v[self.x] as usize] == 0 { self.pc += 2; }} // not pressed
+    fn i_EX9E(&mut self) { if self.keys[self.v[self.x] as usize] == 1 { self.pc += 2; }} // pressed
+    fn i_EXA1(&mut self) { if self.keys[self.v[self.x] as usize] == 0 { self.pc += 2; }} // not pressed
     
-    fn i_FX07(&mut self) { self.v[self.x] = self.delay_timer; } // Set VX = delay timer value
+    fn i_FX07(&mut self) { self.v[self.x] = self.dt; } // Set VX = delay timer value
     
     // Wait for a key press, store the position of the key in VX
     fn i_FX0A(&mut self) {
-        match self.key.iter().position(|&val| val == 1) {
+        match self.keys.iter().position(|&val| val == 1) {
             Some(i) => self.v[self.x] = i as u8,
             None => self.pc -= 2,
         }
     }
     
-    fn i_FX15(&mut self) { self.delay_timer = self.v[self.x];   } // Set delay timer = VX
-    fn i_FX18(&mut self) { self.sound_timer = self.v[self.x];   } // Set sound timer = VX
+    fn i_FX15(&mut self) { self.dt = self.v[self.x];   } // Set delay timer = VX
+    fn i_FX18(&mut self) { self.st = self.v[self.x];   } // Set sound timer = VX
     fn i_FX1E(&mut self) { self.i += self.v[self.x] as u16;     } // Set I += VX
     fn i_FX29(&mut self) { self.i  = self.v[self.x] as u16 * 5; } // Set I = location of sprite for digit VX
     
@@ -304,23 +312,9 @@ impl Chip8 {
         self.memory[self.i as usize + 2] = (self.v[self.x] % 100) % 10;
     }
     
-    // Store registers V0 through VX in memory starting at location I
-    fn i_FX55(&mut self) {
-        for a in 0..=self.x {
-            self.memory[a + self.i as usize] = self.v[a];
-        }
-
-        self.i += self.x as u16 + 1;
-    }
-
-    // Read registers V0 through VX from memory starting at location I
-    fn i_FX65(&mut self) {
-        for a in 0..=self.x {
-            self.v[a] = self.memory[a + self.i as usize];
-        }
-
-        self.i += self.x as u16 + 1;
-    }
+    // Store/read registers V0 through VX in/from memory starting at location I respectively
+    fn i_FX55(&mut self) { for a in 0..=self.x { self.memory[a + self.i as usize] = self.v[a]; }}
+    fn i_FX65(&mut self) { for a in 0..=self.x { self.v[a] = self.memory[a + self.i as usize]; }}
 
     pub fn load_game(&mut self, game: &String) {
         let buffer = match fs::read(game) {
