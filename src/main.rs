@@ -12,6 +12,8 @@ fn main() {
     };
 
     let mut my_chip8 = chip8::Chip8::initialize();
+
+    // maybe use rust_minifb instead
     let mut my_chip8sdl = chip8sdl::Chip8SDL::initialize(&game);
 
     my_chip8.load_game(&game);

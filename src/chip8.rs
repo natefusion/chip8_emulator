@@ -189,7 +189,7 @@ impl Chip8 {
     }
     
     fn i_NULL(&mut self) {
-        eprintln!("Invalid opcode: {:X} (raw opcode)", self.opcode);
+        eprintln!("Unrecognized opcode: {:X}", self.opcode);
         process::exit(1);
     }
     
@@ -325,13 +325,13 @@ impl Chip8 {
             },
         };
 
-        // 512 == 0x200
-        if 4096 - 512 > buffer.len() {
+        // 4096 - 512
+        if buffer.len()-1 <= 3584 {
             for (i, val) in buffer.iter().enumerate() {
                 self.memory[i + 512] = *val;
             }
         } else {
-            eprintln!("Error: ROM too big");
+            eprintln!("Error: ROM too big.\nROM size: {} B\nMax size: 3584 B", buffer.len()-1);
             process::exit(1);
         }
     }
