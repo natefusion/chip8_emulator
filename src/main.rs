@@ -1,11 +1,12 @@
-use std::{process,env};
 mod chip8sdl;
 mod chip8;
 
+use std::{process, env, fs::File};
+
 fn main() {
-    let game = match env::args().nth(1) {   
-        Some(game) => game,
-        _=> {
+    let (mut file, filename) = match env::args().nth(1) {   
+        Some(filename) => (File::open(&filename).unwrap(), filename),
+        None => {
             eprintln!("Error, please enter a game file as an argument");
             process::exit(1);
         },
@@ -14,9 +15,9 @@ fn main() {
     let mut my_chip8 = chip8::Chip8::initialize();
 
     // maybe use rust_minifb instead
-    let mut my_chip8sdl = chip8sdl::Chip8SDL::initialize(&game);
+    let mut my_chip8sdl = chip8sdl::Chip8SDL::initialize(&filename);
 
-    my_chip8.load_game(&game);
+    my_chip8.load_game(&mut file);
     my_chip8.sound_state = false;
 
     // Emulation loop
@@ -27,8 +28,10 @@ fn main() {
             my_chip8sdl.draw_frame(&my_chip8.gfx);
         }
         
-        if my_chip8sdl.handle_events(&mut my_chip8.keys) {
-            break;
+        match my_chip8sdl.handle_events(&mut my_chip8.keys) {
+            1 => break, // quits game
+            2 => my_chip8.load_game(&mut file), // reloads game
+            _ => {},
         }
     }
 }

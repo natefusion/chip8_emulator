@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types, non_snake_case)]
 use rand::Rng;
-use std::{fs,process,time::Duration,thread::sleep};
+use std::{fs::File, io::{Seek, SeekFrom,Read},process,time::Duration,thread::sleep};
 
 /* Materials:
  * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
@@ -15,6 +15,7 @@ use std::{fs,process,time::Duration,thread::sleep};
 const W:     usize = 64;
 const H:     usize = 32;
 const DELAY: u64   = 16_666;
+const MEM:   usize = 4096;
 
 pub struct Chip8 {
     // Function pointer tables that hold a reference to all instructions    
@@ -33,7 +34,7 @@ pub struct Chip8 {
      * 0x050-0x0A0 - Used for the builtin 4x5 pixel font set (0-F)
      * 0x200-0xFFF - Program ROM and work RAM
      */
-    memory: [u8; 4096],
+    memory: [u8; MEM],
 
     // Cpu registers; Used for storing up to 15 different values; V[0-F] (VF for 'carry flag')
     v: [u8; 16],
@@ -95,7 +96,7 @@ impl Chip8 {
                      Self::i_FX29, Self::i_FX33, Self::i_FX55, Self::i_FX65],
 
             opcode: 0,
-            memory: [0; 4096],
+            memory: [0; MEM],
             v: [0; 16],
             i: 0,
             pc: 0x200, // programs are loaded at memory[0x200]
@@ -113,29 +114,25 @@ impl Chip8 {
             x:   0,
             y:   0,
         };
-        
-        let fontset = [
-            0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-            0x20, 0x60, 0x20, 0x20, 0x70, // 1
-            0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-            0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-            0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-            0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-            0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-            0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-            0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-            0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-            0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-            0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-            0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-            0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-            0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-            0xF0, 0x80, 0xF0, 0x80, 0x80, // F
-        ];
 
-        for (i, val) in fontset.iter().enumerate() {
-            chip.memory[i] = *val;
-        }
+        [0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+         0x20, 0x60, 0x20, 0x20, 0x70, // 1
+         0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+         0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+         0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+         0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+         0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+         0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+         0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+         0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+         0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+         0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+         0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+         0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+         0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+         0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+        ].iter().enumerate().for_each(|(i, val)| chip.memory[i] = *val);
+
         chip
     }
 
@@ -158,6 +155,7 @@ impl Chip8 {
         if self.sound_state && self.st > 0 {
             self.st -= 1;
             println!("PING");
+            sleep(Duration::from_micros(DELAY));
         }
 
         if self.dt > 0 {
@@ -174,6 +172,7 @@ impl Chip8 {
 
     fn i_F000(&mut self) {
         let x = match self.nn {
+            //7 + 3 + 11 + 3 + 6 + 11 + 10 + 22 + 28 = 0x65
             0x007 => 0, 0x00A => 1,
             0x015 => 2, 0x018 => 3,
             0x01E => 4, 0x029 => 5,
@@ -316,22 +315,22 @@ impl Chip8 {
     fn i_FX55(&mut self) { for a in 0..=self.x { self.memory[a + self.i as usize] = self.v[a]; }}
     fn i_FX65(&mut self) { for a in 0..=self.x { self.v[a] = self.memory[a + self.i as usize]; }}
 
-    pub fn load_game(&mut self, game: &String) {
-        let buffer = match fs::read(game) {
-            Ok(file) => file,
-            Err(_) => {
-                eprintln!("Error: File read error");
-                process::exit(1);
-            },
-        };
+    pub fn load_game(&mut self, game: &mut File) {
+        let mut buffer = vec![];
+        game.seek(SeekFrom::Start(0)).unwrap();
+        game.read_to_end(&mut buffer).unwrap();
 
-        // 4096 - 512
-        if buffer.len()-1 <= 3584 {
-            for (i, val) in buffer.iter().enumerate() {
-                self.memory[i + 512] = *val;
+        if buffer.len()-1 <= MEM - 512 {
+            let mut byte = buffer.iter();
+
+            for val in self.memory.iter_mut().skip(512) {
+                *val = match byte.next() {
+                    Some(b) => *b,
+                    None => 0,
+                }
             }
         } else {
-            eprintln!("Error: ROM too big.\nROM size: {} B\nMax size: 3584 B", buffer.len()-1);
+            eprintln!("Error: ROM too big.\nYour ROM size: {} B\nMax size: 3584 B", buffer.len()-1);
             process::exit(1);
         }
     }

@@ -51,14 +51,19 @@ impl Chip8SDL {
         self.canvas.present();
     }
     
-    pub fn handle_events(&mut self, keys: &mut [u8]) -> bool {
+    pub fn handle_events(&mut self, keys: &mut [u8]) -> usize {
         for event in self.event_pump.poll_iter() {
-            if let Event::Quit { .. } = event { return true; }
-            
             let (key_state, keycode) = match event {
-                Event::KeyDown { keycode, .. } => (1, keycode),
-                Event::KeyUp   { keycode, .. } => (0, keycode),
-                _=> (0, None),
+                Event::Quit { .. } => { return 1; },
+
+                Event::KeyDown { keycode, .. } => match keycode {
+                    Some(Keycode::L) => { return 2; },
+                    _ => (1, keycode),
+                },
+
+                Event::KeyUp { keycode, .. } => (0, keycode),
+
+                _ => { continue; },
             };
 
             if let Some(key) = keycode {
@@ -72,12 +77,12 @@ impl Chip8SDL {
                         Keycode::D => 0x9,    Keycode::F => 0xE,
                         Keycode::Z => 0xA,    Keycode::X => 0x0,
                         Keycode::C => 0xB,    Keycode::V => 0xF,
-                        _=> break,
+                        _ => continue,
                     }
                 ] = key_state;
             }
         }
         
-        false
+        0
     }
 }
