@@ -7,7 +7,7 @@ use sdl2::video::Window;
 
 const WIDTH: u32 = 64;
 const HEIGHT: u32 = 32;
-const SCALE: u32 = 10;
+const SCALE: u32 = 20;
 
 pub struct Chip8SDL {
     event_pump: sdl2::EventPump,

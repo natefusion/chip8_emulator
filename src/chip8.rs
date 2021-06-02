@@ -195,7 +195,9 @@ impl Chip8 {
     // Clear the screen
     fn i_00E0(&mut self) {
         self.gfx = [0; W*H];
-        self.draw_flag = true;
+
+        // If I conveniently do not draw on clear, I can avoid flickering problems >:)
+        //self.draw_flag = true;
     }
     
     // Return from a subroutine
@@ -272,13 +274,17 @@ impl Chip8 {
         for py in 0..self.n {
             let byte = self.memory[self.i as usize + py];
             for px in 0..8 {
-                let pixel = (byte & (0x80 >> px)) >> (7 - px);
+                let pixel = (byte >> (7 - px)) & 1;
                 let position = ((self.v[self.x] as usize + px) % W) + (((self.v[self.y] as usize + py) % H) * W);
-                
-                let oldpixel = self.gfx[position];
-                self.gfx[position] ^= pixel & 1;
-                self.v[0xF] = oldpixel ^ self.gfx[position];
 
+                if pixel == 0 { continue; }
+                
+                if self.gfx[position] == 1 {
+                    self.gfx[position] = 0;
+                    self.v[0xF] = 1;
+                } else {
+                    self.gfx[position] = 1;
+                }
             }
         }
         self.draw_flag = true;
@@ -329,6 +335,24 @@ impl Chip8 {
                     None => 0,
                 }
             }
+
+            // reset game state
+            self.opcode = 0;
+            self.v = [0; 16];
+            self.i = 0;
+            self.pc = 0x200;
+            self.dt = 0;
+            self.st = 0;
+            self.stack = [0; 16];
+            self.sp = 0;
+            self.gfx = [0; W*H];
+            self.draw_flag = false;
+            self.keys = [0;16];
+            self.nnn = 0;
+            self.nn = 0;
+            self.n = 0;
+            self.x = 0;
+            self.y = 0;
         } else {
             eprintln!("Error: ROM too big.\nYour ROM size: {} B\nMax size: 3584 B", buffer.len()-1);
             process::exit(1);
