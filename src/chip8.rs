@@ -14,7 +14,6 @@ use std::{fs::File, io::{Seek, SeekFrom,Read},process,time::Duration,thread::sle
 
 const W:     usize = 64;
 const H:     usize = 32;
-const DELAY: u64   = 16_666;
 const MEM:   usize = 4096;
 
 pub struct Chip8 {
@@ -50,9 +49,6 @@ pub struct Chip8 {
 
     // Sound timer; Will play a sound for multiples of 1/60s
     st: u8,
-
-    // Turns sound on/off
-    pub sound_state: bool,
 
     // Stack; Allows for 16 different subroutines at any one time
     stack: [u16; 16],
@@ -102,7 +98,6 @@ impl Chip8 {
             pc: 0x200, // programs are loaded at memory[0x200]
             dt: 0,
             st: 0,
-            sound_state: true,
             stack: [0; 16],
             sp: 0,
             gfx: [0; W*H],
@@ -151,17 +146,12 @@ impl Chip8 {
 
         self.t_main[((self.opcode & 0xF000) >> 12) as usize](self);
 
-        // Update timers
-        if self.sound_state && self.st > 0 {
-            self.st -= 1;
-            println!("PING");
-            sleep(Duration::from_micros(DELAY));
-        }
+    }
 
-        if self.dt > 0 {
-            self.dt -= 1;
-            sleep(Duration::from_micros(DELAY));
-        }
+    // this should be called 60 times/second. make that happen
+    fn tick(&mut self) {
+        if self.st > 0 { self.st -= 1; }
+        if self.dt > 0 { self.dt -= 1; }
     }
 
     // Instructions
@@ -197,7 +187,7 @@ impl Chip8 {
         self.gfx = [0; W*H];
 
         // If I conveniently do not draw on clear, I can avoid flickering problems >:)
-        //self.draw_flag = true;
+        self.draw_flag = true;
     }
     
     // Return from a subroutine

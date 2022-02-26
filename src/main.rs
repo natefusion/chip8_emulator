@@ -22,7 +22,6 @@ fn main() {
     let mut my_chip8sdl = chip8sdl::Chip8SDL::initialize(&filename);
 
     my_chip8.load_game(&mut file);
-    my_chip8.sound_state = false;
 
     let mut cycle = 0;
 
@@ -41,7 +40,7 @@ fn main() {
             _ => {},
         }
 
-        if cycle == CYCLES_BEFORE_SLEEP as usize {
+          if cycle == CYCLES_BEFORE_SLEEP as usize {
             sleep(Duration::from_millis(SLEEP));
             cycle = 0;
         }
