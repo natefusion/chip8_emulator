@@ -58,6 +58,8 @@ impl Chip8SDL {
 
                 Event::KeyDown { keycode, .. } => match keycode {
                     Some(Keycode::L) => { return 2; },
+                    Some(Keycode::J) => { return 3; },
+                    Some(Keycode::K) => { return 4; },
                     _ => (1, keycode),
                 },
 

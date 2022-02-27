@@ -1,11 +1,7 @@
 mod chip8sdl;
 mod chip8;
 
-use std::{process, env, fs::File, time::Duration, thread::sleep};
-
-const CYCLES_PER_SECOND  : f64 = 500.;
-const CYCLES_BEFORE_SLEEP: f64 = 10.;
-const SLEEP: u64 = (100. * CYCLES_BEFORE_SLEEP / CYCLES_PER_SECOND) as u64;
+use std::{process, env, fs::File, time::Instant};
 
 fn main() {
     let (mut file, filename) = match env::args().nth(1) {   
@@ -23,26 +19,33 @@ fn main() {
 
     my_chip8.load_game(&mut file);
 
-    let mut cycle = 0;
-
+    let mut delay = 1; // milliseconds
+    let mut last = Instant::now();
     // Emulation loop
     loop {
-        cycle += 1;
-        my_chip8.emulate_cycle();
+        let current = Instant::now();
+        let elapsed = current - last;
+        
+        let dt = elapsed.as_millis();
 
-        if my_chip8.draw_flag {
-            my_chip8sdl.draw_frame(&my_chip8.gfx);
+        if dt > delay {
+            last = current;
+            my_chip8.emulate_cycle();
+
+            if my_chip8.draw_flag {
+                my_chip8sdl.draw_frame(&my_chip8.gfx);
+                my_chip8.draw_flag = false;
+            }
         }
+
+        let change_delay = |sub, d: &mut u128| { if *d > 0 && sub { *d -= 1; } else if !sub { *d += 1; } println!("{}", d); };
         
         match my_chip8sdl.handle_events(&mut my_chip8.keys) {
             1 => break, // quits game
-            2 => my_chip8.load_game(&mut file), // reloads game
+            2 => my_chip8.load_game(&mut file), // reloads game // L
+            3 => { change_delay(true, &mut delay); }, // J
+            4 => { change_delay(false, &mut delay); }, // K
             _ => {},
-        }
-
-          if cycle == CYCLES_BEFORE_SLEEP as usize {
-            sleep(Duration::from_millis(SLEEP));
-            cycle = 0;
         }
     }
 }

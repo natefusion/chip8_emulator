@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types, non_snake_case)]
 use rand::Rng;
-use std::{fs::File, io::{Seek, SeekFrom,Read},process,time::Duration,thread::sleep};
+use std::{fs::File, io::{Seek, SeekFrom,Read}, process};
 
 /* Materials:
  * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
@@ -61,7 +61,7 @@ pub struct Chip8 {
 
     // The display will only be updated when this is true
     pub draw_flag: bool,
-    
+
     // Holds keyboard state; 16 keys available
     pub keys: [u8; 16],
 
@@ -101,7 +101,7 @@ impl Chip8 {
             stack: [0; 16],
             sp: 0,
             gfx: [0; W*H],
-            draw_flag: false,            
+            draw_flag: false,
             keys: [0; 16],
             nnn: 0,
             nn:  0,
@@ -132,7 +132,6 @@ impl Chip8 {
     }
 
     pub fn emulate_cycle(&mut self) {
-        self.draw_flag = false;
         let op1 = self.memory[self.pc as usize] as u16;
         let op2 = self.memory[self.pc as usize + 1] as u16;
         self.opcode = op1 << 8 | op2;
@@ -145,6 +144,8 @@ impl Chip8 {
         self.y   = ((self.opcode & 0xF0) >> 4)  as usize; // upper 4 bits of the low byte
 
         self.t_main[((self.opcode & 0xF000) >> 12) as usize](self);
+
+        self.tick();
 
     }
 
@@ -187,7 +188,7 @@ impl Chip8 {
         self.gfx = [0; W*H];
 
         // If I conveniently do not draw on clear, I can avoid flickering problems >:)
-        self.draw_flag = true;
+        //self.draw_flag = false;
     }
     
     // Return from a subroutine
@@ -260,6 +261,7 @@ impl Chip8 {
     
     // Display n-byte sprite starting at memory location I at (VX,VY). Set VF = collision
     fn i_DXYN(&mut self) {
+        self.draw_flag = true;
         // sprites are always 8 pixels (1 byte) long and between 1 and 15 pixels (up to 2 bytes) high
         for py in 0..self.n {
             let byte = self.memory[self.i as usize + py];
@@ -273,11 +275,11 @@ impl Chip8 {
                     self.gfx[position] = 0;
                     self.v[0xF] = 1;
                 } else {
+                    //self.draw_flag = true; // should I go here?
                     self.gfx[position] = 1;
                 }
             }
         }
-        self.draw_flag = true;
     }
 
     // Skip next instruction if key with the value of VX is ...
@@ -289,8 +291,8 @@ impl Chip8 {
     // Wait for a key press, store the position of the key in VX
     fn i_FX0A(&mut self) {
         match self.keys.iter().position(|&val| val == 1) {
-            Some(i) => self.v[self.x] = i as u8,
-            None => self.pc -= 2,
+            Some(i) => { self.v[self.x] = i as u8; },
+            None => { self.pc -= 2; },
         }
     }
     
