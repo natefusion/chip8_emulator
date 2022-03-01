@@ -47,7 +47,7 @@ pub struct Chip8 {
     stack: [u16; 16],
 
     // Stack pointer; for navigation through the stack
-    sp: usize,
+    sp: u16,
 
     // Screen is 64px by 32px
     pub gfx: [u8; W*H],
@@ -114,7 +114,7 @@ impl Chip8 {
         match (self.opcode & 0xF000) >> 12 {
             0x0 => match n {
                 0x0 => { self.gfx = [0; W*H]; },
-                0xE => { self.pc = self.stack[self.sp];
+                0xE => { self.pc = self.stack[self.sp as usize];
                          self.sp -= 1; },
                 
                 _ => { err(); },
@@ -125,7 +125,7 @@ impl Chip8 {
 
             // Execute subroutine starting at nnn
             0x2 => { self.sp += 1;
-                     self.stack[self.sp] = self.pc;
+                     self.stack[self.sp as usize] = self.pc;
                      self.pc = nnn; },
 
             // Skip next instruction if ...
