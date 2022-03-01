@@ -17,13 +17,6 @@ const H:     usize = 32;
 const MEM:   usize = 4096;
 
 pub struct Chip8 {
-    // Function pointer tables that hold a reference to all instructions    
-    t_main: [fn(&mut Self); 16],
-    t_0000: [fn(&mut Self); 2],
-    t_8000: [fn(&mut Self); 15],
-    t_E000: [fn(&mut Self); 2],
-    t_F000: [fn(&mut Self); 9],
-
     // Caries the instruction to be executed; Each instruction is two bytes long
     opcode: u16,
 
@@ -54,7 +47,7 @@ pub struct Chip8 {
     stack: [u16; 16],
 
     // Stack pointer; for navigation through the stack
-    sp: u16,
+    sp: usize,
 
     // Screen is 64px by 32px
     pub gfx: [u8; W*H],
@@ -64,33 +57,11 @@ pub struct Chip8 {
 
     // Holds keyboard state; 16 keys available
     pub keys: [u8; 16],
-
-    // Aliases for currently used values
-    nnn: u16,   // address; 12-bit value              
-    nn:  u8,    // byte;    8-bit value               
-    n:   usize, // nibble;  4-bit value             
-    x:   usize, // nibble: lower 4 bits of the high byte
-    y:   usize, // nibble: upper 4 bits of the low byte 
 }
 
 impl Chip8 {
     pub fn initialize() -> Self {
         let mut chip = Self {
-            t_main: [Self::i_0000, Self::i_1NNN, Self::i_2NNN, Self::i_3XNN, Self::i_4XNN,
-                     Self::i_5XY0, Self::i_6XNN, Self::i_7XNN, Self::i_8000, Self::i_9XY0,
-                     Self::i_ANNN, Self::i_BNNN, Self::i_CXNN, Self::i_DXYN, Self::i_E000, Self::i_F000],
-            
-            t_0000: [Self::i_00E0, Self::i_00EE],
-            
-            t_8000: [Self::i_8XY0, Self::i_8XY1, Self::i_8XY2, Self::i_8XY3, Self::i_8XY4,
-                     Self::i_8XY5, Self::i_8XY6, Self::i_8XY7, Self::i_NULL, Self::i_NULL,
-                     Self::i_NULL, Self::i_NULL, Self::i_NULL, Self::i_NULL, Self::i_8XYE],
-            
-            t_E000: [Self::i_EX9E, Self::i_EXA1],
-            
-            t_F000: [Self::i_FX07, Self::i_FX0A, Self::i_FX15, Self::i_FX18, Self::i_FX1E,
-                     Self::i_FX29, Self::i_FX33, Self::i_FX55, Self::i_FX65],
-
             opcode: 0,
             memory: [0; MEM],
             v: [0; 16],
@@ -103,11 +74,6 @@ impl Chip8 {
             gfx: [0; W*H],
             draw_flag: false,
             keys: [0; 16],
-            nnn: 0,
-            nn:  0,
-            n:   0,
-            x:   0,
-            y:   0,
         };
 
         [0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -137,181 +103,120 @@ impl Chip8 {
         self.opcode = op1 << 8 | op2;
         self.pc += 2;
 
-        self.nnn =  (self.opcode & 0xFFF)       as u16;   // addr; 12-bit value
-        self.nn  =  (self.opcode & 0xFF)        as u8;    // byte; 8-bit value
-        self.n   =  (self.opcode & 0xF)         as usize; // nibble; 4-bit value
-        self.x   = ((self.opcode & 0xF00) >> 8) as usize; // lower 4 bits of the high byte
-        self.y   = ((self.opcode & 0xF0) >> 4)  as usize; // upper 4 bits of the low byte
+        let nnn =  (self.opcode & 0xFFF)        as u16;   // addr; 12-bit value
+        let nn  =  (self.opcode & 0xFF)         as u8;    // byte; 8-bit value
+        let n   =  (self.opcode & 0xF)          as usize; // nibble; 4-bit value
+        let x   = ((self.opcode & 0xF00) >> 8)  as usize; // lower 4 bits of the high byte
+        let y   = ((self.opcode & 0xF0)  >> 4)  as usize; // upper 4 bits of the low byte
 
-        self.t_main[((self.opcode & 0xF000) >> 12) as usize](self);
+        let err = || println!("Unknown opcode: 0x{:x}", self.opcode);
 
-        self.tick();
+        match (self.opcode & 0xF000) >> 12 {
+            0x0 => match n {
+                0x0 => { self.gfx = [0; W*H]; },
+                0xE => { self.pc = self.stack[self.sp];
+                         self.sp -= 1; },
+                
+                _ => { err(); },
+            },
 
-    }
+            // Jump to memory location nnn
+            0x1 => { self.pc = nnn; },
 
-    // this should be called 60 times/second. make that happen
-    fn tick(&mut self) {
+            // Execute subroutine starting at nnn
+            0x2 => { self.sp += 1;
+                     self.stack[self.sp] = self.pc;
+                     self.pc = nnn; },
+
+            // Skip next instruction if ...
+            0x3 => { if self.v[x] == nn        { self.pc += 2; } },
+            0x4 => { if self.v[x] != nn        { self.pc += 2; } },
+            0x5 => { if self.v[x] == self.v[y] { self.pc += 2; } },
+
+            0x6 => { self.v[x]  = nn; },
+            0x7 => { self.v[x] += nn; },
+
+            0x8 => match n {
+                0x0 => { self.v[x]  = self.v[y]; },
+                0x1 => { self.v[x] |= self.v[y]; },
+                0x2 => { self.v[x] &= self.v[y]; },
+                0x3 => { self.v[x] ^= self.v[y]; },
+
+                0x4 => { let sum = self.v[x] as u16 + self.v[y] as u16;
+                         self.v[0xF] = (sum > 0xFF) as u8;
+                         self.v[x] = sum as u8; },
+
+                0x5 => { let diff = self.v[x] as i8 - self.v[y] as i8;
+                         self.v[0xF] = (diff > 0) as u8;
+                         self.v[x] = diff as u8; },
+
+                0x6 => { self.v[0xF] = self.v[x] & 1;
+                         self.v[x] = self.v[y] >> 1; },
+
+                0x7 => { let diff = self.v[y] as i8 - self.v[x] as i8;
+                         self.v[0xF] = (diff > 0) as u8;
+                         self.v[x] = diff as u8; },
+                
+                0xE => { self.v[0xF] = self.v[x] >> 7;
+                         self.v[x] = self.v[y] << 1; },
+                
+                _ => { err(); } },
+
+            0x9 => { if self.v[x] != self.v[y] { self.pc += 2; } },
+            0xA => { self.i = nnn; },
+            0xB => { self.pc = nnn + self.v[0] as u16; },
+            0xC => { self.v[x] = rand::thread_rng().gen_range(0, 255) & nn; },
+            
+            0xD => { self.draw_flag = true;
+                     for py in 0..n {
+                         let byte = self.memory[self.i as usize + py];
+                         for px in 0..8 {
+                             let pixel = (byte >> (7 - px)) & 1;
+                             if pixel == 0 { continue; }
+
+                             // just grabs index from x and y coodinates
+                             let pos = ((self.v[x] as usize + px) % W) + (((self.v[y] as usize + py) % H) * W);
+
+                             if self.gfx[pos] == 1 {
+                                 self.gfx[pos] = 0;
+                                 self.v[0xF] = 1;
+                             } else {
+                                 self.gfx[pos] = 1;
+                             }}} },
+            
+            0xE => match nn {
+                0x9E => { if self.keys[self.v[x] as usize] == 1 { self.pc += 2; } },
+                0xA1 => { if self.keys[self.v[x] as usize] == 0 { self.pc += 2; } }
+                _ => { err(); } },
+
+            0xF => match nn {
+                0x07 => { self.v[x] = self.dt; },
+                
+                0x0A => match self.keys.iter().position(|&v| v == 1) {
+                    Some(i) => { self.v[x] = i as u8; },
+                    None    => { self.pc -= 2; } },
+                
+                0x15 => { self.dt = self.v[x]; },
+                0x18 => { self.st = self.v[x]; },
+                0x1E => { self.i += self.v[x] as u16; },
+                0x29 => { self.i  = self.v[x] as u16 * 5; }, // Sprites are 5 bytes in length
+                
+                0x33 => { self.memory[self.i as usize]     = (self.v[x] / 100) % 10;
+                          self.memory[self.i as usize + 1] = (self.v[x] / 10) % 10;
+                          self.memory[self.i as usize + 2] = self.v[x] % 10; },
+                
+                0x55 => { for a in 0..=x { self.memory[a + self.i as usize] = self.v[a]; } },
+                0x65 => { for a in 0..=x { self.v[a] = self.memory[a + self.i as usize]; } },
+                _ => { err(); },
+            },
+            
+            _ => { err(); },
+        }
+
+        // These should count down at 60 times a second!!!!
         if self.st > 0 { self.st -= 1; }
         if self.dt > 0 { self.dt -= 1; }
     }
-
-    // Instructions
-
-    fn i_0000(&mut self) { self.t_0000[self.n >> 3](self); }
-    fn i_8000(&mut self) { self.t_8000[self.n     ](self); }
-    fn i_E000(&mut self) { self.t_E000[self.y  - 9](self); }
-
-    fn i_F000(&mut self) {
-        let x = match self.nn {
-            //7 + 3 + 11 + 3 + 6 + 11 + 10 + 22 + 28 = 0x65
-            0x007 => 0, 0x00A => 1,
-            0x015 => 2, 0x018 => 3,
-            0x01E => 4, 0x029 => 5,
-            0x033 => 6, 0x055 => 7,
-            0x065 => 8,
-            _=> {
-                self.i_NULL();
-                return;
-            },
-        };
-
-        self.t_F000[x](self);
-    }
-    
-    fn i_NULL(&mut self) {
-        eprintln!("Unrecognized opcode: {:X}", self.opcode);
-        process::exit(1);
-    }
-    
-    // Clear the screen
-    fn i_00E0(&mut self) {
-        self.gfx = [0; W*H];
-
-        // If I conveniently do not draw on clear, I can avoid flickering problems >:)
-        //self.draw_flag = false;
-    }
-    
-    // Return from a subroutine
-    fn i_00EE(&mut self) {
-        self.pc = self.stack[self.sp as usize];
-        self.sp -= 1;
-    }
-    
-    // Jump to memory location NNN
-    fn i_1NNN(&mut self) { self.pc = self.nnn; }
-    
-    // Execute subroutine starting at NNN
-    fn i_2NNN(&mut self) {
-        self.sp += 1;
-        self.stack[self.sp as usize] = self.pc;
-        self.pc = self.nnn;
-    }
-    
-    // Skip next instruction if ...
-    fn i_3XNN(&mut self) { if self.v[self.x] == self.nn        { self.pc += 2; }} // VX == NN
-    fn i_4XNN(&mut self) { if self.v[self.x] != self.nn        { self.pc += 2; }} // VX != NN
-    fn i_5XY0(&mut self) { if self.v[self.x] == self.v[self.y] { self.pc += 2; }} // VX == VY
-    
-    fn i_6XNN(&mut self) { self.v[self.x]  = self.nn; }        // Set VX == NN
-    fn i_7XNN(&mut self) { self.v[self.x] += self.nn; }        // Set VX += NN
-    fn i_8XY0(&mut self) { self.v[self.x]  = self.v[self.y]; } // Set VX = VY
-    fn i_8XY1(&mut self) { self.v[self.x] |= self.v[self.y]; } // Set VX |= VY
-    fn i_8XY2(&mut self) { self.v[self.x] &= self.v[self.y]; } // Set VX &= VY
-    fn i_8XY3(&mut self) { self.v[self.x] ^= self.v[self.y]; } // Set VX ^= VY
-    
-    // Sets VX = VX + VY, set VF = carry
-    fn i_8XY4(&mut self) {
-        let sum = self.v[self.x] as u16 + self.v[self.y] as u16;
-        self.v[0xF] = (sum > 0xFF) as u8; // VF = 1 if carry occurs, 0 if not
-        self.v[self.x] = sum as u8;
-    }
-    
-    // Set VX -= VY. set VF = NOT borrow
-    fn i_8XY5(&mut self) {
-        let diff = self.v[self.x] as i8 - self.v[self.y] as i8;
-        self.v[0xF] = (diff > 0) as u8; // If VX < VY, then VF = 0, else VF = 1
-        self.v[self.x] = diff as u8;
-    }
-    
-    // Set VX = VX SHR 1
-    fn i_8XY6(&mut self) {
-        self.v[0xF] = self.v[self.x] & 1;
-        self.v[self.x] = self.v[self.y] >> 1;
-    }
-    
-    // Set VX = VY - VX. set VF = NOT borrow
-    fn i_8XY7(&mut self) {
-        let diff = self.v[self.y] as i8 - self.v[self.x] as i8;
-        self.v[0xF] = (diff > 0) as u8; // If VY < VX, then VF = 0, else VF = 1
-        self.v[self.x] = diff as u8;
-    }
-    
-    // Set VX = VY SHL 1
-    fn i_8XYE(&mut self) {
-        self.v[0xF] = self.v[self.x] >> 7;
-        self.v[self.x] = self.v[self.y] << 1;
-    }
-    
-    // Skip next instruction if VX != VY
-    fn i_9XY0(&mut self) { if self.v[self.x] != self.v[self.y] { self.pc += 2; }}
-
-    fn i_ANNN(&mut self) { self.i = self.nnn; } // Store memory address NNN in register I
-    fn i_BNNN(&mut self) { self.pc = self.nnn + self.v[0] as u16; } // Jump to location NNN + V0
-    fn i_CXNN(&mut self) { self.v[self.x] = rand::thread_rng().gen_range(0, 255) & self.nn; } // Set VX = random byte AND NN
-    
-    // Display n-byte sprite starting at memory location I at (VX,VY). Set VF = collision
-    fn i_DXYN(&mut self) {
-        self.draw_flag = true;
-        // sprites are always 8 pixels (1 byte) long and between 1 and 15 pixels (up to 2 bytes) high
-        for py in 0..self.n {
-            let byte = self.memory[self.i as usize + py];
-            for px in 0..8 {
-                let pixel = (byte >> (7 - px)) & 1;
-                let position = ((self.v[self.x] as usize + px) % W) + (((self.v[self.y] as usize + py) % H) * W);
-
-                if pixel == 0 { continue; }
-                
-                if self.gfx[position] == 1 {
-                    self.gfx[position] = 0;
-                    self.v[0xF] = 1;
-                } else {
-                    //self.draw_flag = true; // should I go here?
-                    self.gfx[position] = 1;
-                }
-            }
-        }
-    }
-
-    // Skip next instruction if key with the value of VX is ...
-    fn i_EX9E(&mut self) { if self.keys[self.v[self.x] as usize] == 1 { self.pc += 2; }} // pressed
-    fn i_EXA1(&mut self) { if self.keys[self.v[self.x] as usize] == 0 { self.pc += 2; }} // not pressed
-    
-    fn i_FX07(&mut self) { self.v[self.x] = self.dt; } // Set VX = delay timer value
-    
-    // Wait for a key press, store the position of the key in VX
-    fn i_FX0A(&mut self) {
-        match self.keys.iter().position(|&val| val == 1) {
-            Some(i) => { self.v[self.x] = i as u8; },
-            None => { self.pc -= 2; },
-        }
-    }
-    
-    fn i_FX15(&mut self) { self.dt = self.v[self.x];   } // Set delay timer = VX
-    fn i_FX18(&mut self) { self.st = self.v[self.x];   } // Set sound timer = VX
-    fn i_FX1E(&mut self) { self.i += self.v[self.x] as u16;     } // Set I += VX
-    fn i_FX29(&mut self) { self.i  = self.v[self.x] as u16 * 5; } // Set I = location of sprite for digit VX
-    
-    // Store the binary-coded decimal equivalent of the value
-    // stored in register VX at address I, I+1, I+2
-    fn i_FX33(&mut self) {
-        self.memory[self.i as usize]     =  self.v[self.x] / 100;
-        self.memory[self.i as usize + 1] = (self.v[self.x] / 10) % 10;
-        self.memory[self.i as usize + 2] = (self.v[self.x] % 100) % 10;
-    }
-    
-    // Store/read registers V0 through VX in/from memory starting at location I respectively
-    fn i_FX55(&mut self) { for a in 0..=self.x { self.memory[a + self.i as usize] = self.v[a]; }}
-    fn i_FX65(&mut self) { for a in 0..=self.x { self.v[a] = self.memory[a + self.i as usize]; }}
 
     pub fn load_game(&mut self, game: &mut File) {
         let mut buffer = vec![];
@@ -340,11 +245,6 @@ impl Chip8 {
             self.gfx = [0; W*H];
             self.draw_flag = false;
             self.keys = [0;16];
-            self.nnn = 0;
-            self.nn = 0;
-            self.n = 0;
-            self.x = 0;
-            self.y = 0;
         } else {
             eprintln!("Error: ROM too big.\nYour ROM size: {} B\nMax size: 3584 B", buffer.len()-1);
             process::exit(1);
