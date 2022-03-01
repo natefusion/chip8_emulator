@@ -15,6 +15,7 @@ use std::{fs::File, io::{Seek, SeekFrom,Read}, process};
 const W:     usize = 64;
 const H:     usize = 32;
 const MEM:   usize = 4096;
+const START: usize = 0x200;
 
 pub struct Chip8 {
     // Caries the instruction to be executed; Each instruction is two bytes long
@@ -66,7 +67,7 @@ impl Chip8 {
             memory: [0; MEM],
             v: [0; 16],
             i: 0,
-            pc: 0x200, // programs are loaded at memory[0x200]
+            pc: START as u16, // programs are loaded at memory[0x200]
             dt: 0,
             st: 0,
             stack: [0; 16],
@@ -223,31 +224,31 @@ impl Chip8 {
         game.seek(SeekFrom::Start(0)).unwrap();
         game.read_to_end(&mut buffer).unwrap();
 
-        if buffer.len()-1 <= MEM - 512 {
-            let mut byte = buffer.iter();
-
-            for val in self.memory.iter_mut().skip(512) {
-                *val = match byte.next() {
-                    Some(b) => *b,
-                    None => 0,
-                }
-            }
-
-            // reset game state
-            self.opcode = 0;
-            self.v = [0; 16];
-            self.i = 0;
-            self.pc = 0x200;
-            self.dt = 0;
-            self.st = 0;
-            self.stack = [0; 16];
-            self.sp = 0;
-            self.gfx = [0; W*H];
-            self.draw_flag = false;
-            self.keys = [0;16];
-        } else {
+        if buffer.len()-1 > MEM - START {
             eprintln!("Error: ROM too big.\nYour ROM size: {} B\nMax size: 3584 B", buffer.len()-1);
             process::exit(1);
         }
+        
+        let mut byte = buffer.iter();
+        
+        for val in self.memory.iter_mut().skip(START) {
+            *val = match byte.next() {
+                Some(b) => *b,
+                None => 0,
+            }
+        }
+        
+        // reset game state
+        self.opcode = 0;
+        self.v = [0; 16];
+        self.i = 0;
+        self.pc = START as u16;
+        self.dt = 0;
+        self.st = 0;
+        self.stack = [0; 16];
+        self.sp = 0;
+        self.gfx = [0; W*H];
+        self.draw_flag = false;
+        self.keys = [0;16];
     }
 }
