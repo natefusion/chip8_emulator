@@ -172,8 +172,8 @@ impl Chip8 {
                      for py in 0..n {
                          let byte = self.memory[self.i as usize + py];
                          for px in 0..8 {
-                             let pixel = (byte >> (7 - px)) & 1;
-                             if pixel == 0 { continue; }
+                             // zeros should not be drawn
+                             if (byte >> (7 - px)) & 1 == 0 { continue; };
 
                              // just grabs index from x and y coodinates
                              let pos = ((self.v[x] as usize + px) % W) + (((self.v[y] as usize + py) % H) * W);
