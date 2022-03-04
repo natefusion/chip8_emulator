@@ -102,109 +102,94 @@ impl Chip8 {
         let n   =  (self.opcode & 0xF)          as usize; // nibble; 4-bit value
         let x   = ((self.opcode & 0xF00) >> 8)  as usize; // lower 4 bits of the high byte
         let y   = ((self.opcode & 0xF0)  >> 4)  as usize; // upper 4 bits of the low byte
+        let w   = (self.opcode & 0xF000) >> 12  as usize; // Highest byte
 
-        let err = || println!("Unknown opcode: 0x{:x}", self.opcode);
-
-        match (self.opcode & 0xF000) >> 12 {
-            0x0 => match n {
-                0x0 => { self.gfx = [0; W*H]; },
-                0xE => { self.pc = self.stack[self.sp as usize];
-                         self.sp -= 1; },
-                
-                _ => { err(); },
-            },
-
-            // Jump to memory location nnn
-            0x1 => { self.pc = nnn; },
-
-            // Execute subroutine starting at nnn
-            0x2 => { self.sp += 1;
-                     self.stack[self.sp as usize] = self.pc;
-                     self.pc = nnn; },
-
-            // Skip next instruction if ...
-            0x3 => { if self.v[x] == nn        { self.pc += 2; } },
-            0x4 => { if self.v[x] != nn        { self.pc += 2; } },
-            0x5 => { if self.v[x] == self.v[y] { self.pc += 2; } },
-
-            0x6 => { self.v[x]  = nn; },
-            0x7 => { self.v[x] += nn; },
-
-            0x8 => match n {
-                0x0 => { self.v[x]  = self.v[y]; },
-                0x1 => { self.v[x] |= self.v[y]; },
-                0x2 => { self.v[x] &= self.v[y]; },
-                0x3 => { self.v[x] ^= self.v[y]; },
-
-                0x4 => { let sum = self.v[x] as u16 + self.v[y] as u16;
-                         self.v[0xF] = (sum > 0xFF) as u8;
-                         self.v[x] = sum as u8; },
-
-                0x5 => { let diff = self.v[x] as i8 - self.v[y] as i8;
-                         self.v[0xF] = (diff > 0) as u8;
-                         self.v[x] = diff as u8; },
-
-                0x6 => { self.v[0xF] = self.v[x] & 1;
-                         self.v[x] = self.v[y] >> 1; },
-
-                0x7 => { let diff = self.v[y] as i8 - self.v[x] as i8;
-                         self.v[0xF] = (diff > 0) as u8;
-                         self.v[x] = diff as u8; },
-                
-                0xE => { self.v[0xF] = self.v[x] >> 7;
-                         self.v[x] = self.v[y] << 1; },
-                
-                _ => { err(); } },
-
-            0x9 => { if self.v[x] != self.v[y] { self.pc += 2; } },
-            0xA => { self.i = nnn; },
-            0xB => { self.pc = nnn + self.v[0] as u16; },
-            0xC => { self.v[x] = rand::thread_rng().gen_range(0, 255) & nn; },
+        match (w, x, y, n) {
+            (0,0,0xE,0x0) => self.gfx = [0; W*H],
+            (0,0,0xE,0xE) => { self.pc = self.stack[self.sp as usize];
+                               self.sp -= 1; },
             
-            0xD => { self.draw_flag = true;
-                     for py in 0..n {
-                         let byte = self.memory[self.i as usize + py];
-                         for px in 0..8 {
-                             // zeros should not be drawn
-                             if (byte >> (7 - px)) & 1 == 0 { continue; };
-
-                             // just grabs index from x and y coodinates
-                             let pos = ((self.v[x] as usize + px) % W) + (((self.v[y] as usize + py) % H) * W);
-
-                             if self.gfx[pos] == 1 {
-                                 self.gfx[pos] = 0;
-                                 self.v[0xF] = 1;
-                             } else {
-                                 self.gfx[pos] = 1;
-                             }}} },
+            (1,_,_,_) => self.pc = nnn,
             
-            0xE => match nn {
-                0x9E => { if self.keys[self.v[x] as usize] == 1 { self.pc += 2; } },
-                0xA1 => { if self.keys[self.v[x] as usize] == 0 { self.pc += 2; } }
-                _ => { err(); } },
-
-            0xF => match nn {
-                0x07 => { self.v[x] = self.dt; },
-                
-                0x0A => match self.keys.iter().position(|&v| v == 1) {
-                    Some(i) => { self.v[x] = i as u8; },
-                    None    => { self.pc -= 2; } },
-                
-                0x15 => { self.dt = self.v[x]; },
-                0x18 => { self.st = self.v[x]; },
-                0x1E => { self.i += self.v[x] as u16; },
-                0x29 => { self.i  = self.v[x] as u16 * 5; }, // Sprites are 5 bytes in length
-                
-                0x33 => { self.memory[self.i as usize]     = (self.v[x] / 100) % 10;
-                          self.memory[self.i as usize + 1] = (self.v[x] / 10) % 10;
-                          self.memory[self.i as usize + 2] = self.v[x] % 10; },
-                
-                0x55 => { for a in 0..=x { self.memory[a + self.i as usize] = self.v[a]; } },
-                0x65 => { for a in 0..=x { self.v[a] = self.memory[a + self.i as usize]; } },
-                _ => { err(); },
-            },
+            (2,_,_,_) => { self.sp += 1;
+                              self.stack[self.sp as usize] = self.pc;
+                              self.pc = nnn; },
             
-            _ => { err(); },
+            (3,_,_,_) => if self.v[x] == nn        { self.pc += 2; },
+            (4,_,_,_) => if self.v[x] != nn        { self.pc += 2; },
+            (5,_,_,_) => if self.v[x] == self.v[y] { self.pc += 2; },
+            
+            (6,_,_,_) => self.v[x]  = nn,
+            (7,_,_,_) => self.v[x] += nn,
+
+            (8,_,_,0) => self.v[x]  = self.v[y],
+            (8,_,_,1) => self.v[x] |= self.v[y],
+            (8,_,_,2) => self.v[x] &= self.v[y],
+            (8,_,_,3) => self.v[x] ^= self.v[y],
+           
+            (8,_,_,4) => { let sum = self.v[x] as u16 + self.v[y] as u16;
+                           self.v[0xF] = (sum > 0xFF) as u8;
+                           self.v[x] = sum as u8; }
+            
+            (8,_,_,5) => { let diff = self.v[x] as i8 - self.v[y] as i8;
+                           self.v[0xF] = (diff > 0) as u8;
+                           self.v[x] = diff as u8; },
+            
+            (8,_,_,6) => { self.v[0xF] = self.v[x] & 1;
+                           self.v[x] = self.v[y] >> 1; },
+            
+            (8,_,_,7) => { let diff = self.v[y] as i8 - self.v[x] as i8;
+                           self.v[0xF] = (diff > 0) as u8;
+                           self.v[x] = diff as u8; },
+            
+            (8,_,_,0xE) => { self.v[0xF] = self.v[x] >> 7;
+                             self.v[x] = self.v[y] << 1; },
+            
+            (9,_,_,0) => if self.v[x] != self.v[y] { self.pc += 2; },
+            
+            (0xA,_,_,_) => self.i = nnn,
+            (0xB,_,_,_) => self.pc = nnn + self.v[0] as u16,
+            (0xC,_,_,_) => self.v[x] = rand::thread_rng().gen_range(0, 255) & nn,
+            
+            (0xD,_,_,_) => { self.draw_flag = true;
+                             for py in 0..n {
+                                 let byte = self.memory[self.i as usize + py];
+                                 for px in 0..8 {
+                                     // zeros should not be drawn
+                                     if (byte >> (7 - px)) & 1 == 0 { continue; };
+                                     
+                                     // just grabs index from x and y coodinates
+                                     let pos = ((self.v[x] as usize + px) % W) + (((self.v[y] as usize + py) % H) * W);
+                                     
+                                     if self.gfx[pos] == 1 {
+                                         self.gfx[pos] = 0;
+                                         self.v[0xF] = 1;
+                                     } else {
+                                         self.gfx[pos] = 1;
+                                     }}} },
+            
+            (0xE,_,0x9,0xE) => if self.keys[self.v[x] as usize] == 1 { self.pc += 2; },
+            (0xE,_,0xA,0x1) => if self.keys[self.v[x] as usize] == 0 { self.pc += 2; },
+            
+            (0xF,_,0,7) => self.v[x] = self.dt,
+            
+            (0xF,_,0,0xA) => match self.keys.iter().position(|&v| v == 1) {
+                Some(i) => self.v[x] = i as u8,
+                None    => self.pc -= 2 },
+            
+            (0xF,_,1,0x5) => self.dt = self.v[x],
+            (0xF,_,1,0x8) => self.st = self.v[x],
+            (0xF,_,1,0xE) => self.i += self.v[x] as u16,
+            (0xF,_,2,0x9) => self.i  = self.v[x] as u16 * 5, // Sprites are 5 bytes in length
+            
+            (0xF,_,3,3) => { self.memory[self.i as usize]     = (self.v[x] / 100) % 10;
+                             self.memory[self.i as usize + 1] = (self.v[x] / 10) % 10;
+                             self.memory[self.i as usize + 2] = self.v[x] % 10; },
+            
+            (0xF,_,5,5) => for a in 0..=x { self.memory[a + self.i as usize] = self.v[a]; },
+            (0xF,_,6,5) => for a in 0..=x { self.v[a] = self.memory[a + self.i as usize]; },
+
+            _ => println!("Unknown opcode: 0x{:x}", self.opcode),
         }
 
         // These should count down at 60 times a second!!!!
