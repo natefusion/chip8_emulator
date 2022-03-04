@@ -18,7 +18,7 @@ const MEM:   usize = 4096;
 const START: usize = 0x200;
 
 pub struct Chip8 {
-    // Caries the instruction to be executed; Each instruction is two bytes long
+    // Carries the instruction to be executed; Each instruction is two bytes long
     opcode: u16,
 
     /* System memory; 4096 bytes
@@ -225,7 +225,7 @@ impl Chip8 {
         game.read_to_end(&mut buffer).unwrap();
 
         if buffer.len()-1 > MEM - START {
-            eprintln!("Error: ROM too big.\nYour ROM size: {} B\nMax size: 3584 B", buffer.len()-1);
+            eprintln!("Error: ROM too big.\nYour ROM size: {} B\nMax size: {} B", buffer.len()-1, MEM - START);
             process::exit(1);
         }
         
