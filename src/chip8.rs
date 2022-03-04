@@ -5,11 +5,6 @@ use std::{fs::File, io::{Seek, SeekFrom,Read}, process};
 /* Materials:
  * http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
  * http://www.multigesture.net/articles/how-to-write-an-emulator-chip-8-interpreter/
- *
- * System memory map:
- * 0x000-0x1FF - Chip 8 interpreter (contains font set in emu)
- * 0x050-0x0A0 - Used for the builtin 4x5 pixel font set (0-F)
- * 0x200-0xFFF - Program ROM and work RAM
  */
 
 const W:     usize = 64;
@@ -21,10 +16,8 @@ pub struct Chip8 {
     // Carries the instruction to be executed; Each instruction is two bytes long
     opcode: u16,
 
-    /* System memory; 4096 bytes
-     * Memory map:
-     * 0x000-0x1FF - Chip 8 interpreter (contains font set in emu)
-     * 0x050-0x0A0 - Used for the builtin 4x5 pixel font set (0-F)
+    /* Memory map:
+     * 0x000-0x1FF - Reserved for interpreter. Usually used for builtin sprites
      * 0x200-0xFFF - Program ROM and work RAM
      */
     memory: [u8; MEM],
