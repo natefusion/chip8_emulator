@@ -32,18 +32,18 @@ impl Chip8SDL {
         Chip8SDL { event_pump, canvas }
     }
     
-    pub fn draw_frame(&mut self, gfx: &[u8]) {
-        self.canvas.set_draw_color(Color::RGB(255, 255, 255));
-        self.canvas.clear();
-        self.canvas.set_draw_color(Color::RGB(0, 0, 0));
-        
-        for (i, val) in gfx.iter().enumerate() {
-            if *val == 1 {
-                let px = i as u32 % WIDTH;
-                let py = (i as u32 - px) / WIDTH;
-
-                let sx = (px * SCALE) as i32;
-                let sy = (py * SCALE) as i32;
+    pub fn draw_frame(&mut self, gfx: &[[u8; HEIGHT as usize]; WIDTH as usize]) {
+        for (x, row) in gfx.iter().enumerate() {
+            for (y, val) in row.iter().enumerate() {
+                let sx = (x as u32 * SCALE) as i32;
+                let sy = (y as u32 * SCALE) as i32;
+                
+                if *val == 1 {
+                    self.canvas.set_draw_color(Color::RGB(0, 0, 0));
+                } else {
+                    self.canvas.set_draw_color(Color::RGB(255, 255, 255));
+                }
+                
                 self.canvas.fill_rect(Rect::new(sx, sy, SCALE, SCALE)).unwrap();
             }
         }

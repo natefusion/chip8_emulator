@@ -44,7 +44,7 @@ pub struct Chip8 {
     sp: u16,
 
     // Screen is 64px by 32px
-    pub gfx: [u8; W*H],
+    pub gfx: [[u8; H]; W],
 
     // The display will only be updated when this is true
     pub draw_flag: bool,
@@ -65,7 +65,7 @@ impl Chip8 {
             st: 0,
             stack: [0; 16],
             sp: 0,
-            gfx: [0; W*H],
+            gfx: [[0; H]; W],
             draw_flag: false,
             keys: [0; 16],
         };
@@ -105,7 +105,7 @@ impl Chip8 {
         let w   = (self.opcode & 0xF000) >> 12  as usize; // Highest byte
 
         match (w, x, y, n) {
-            (0,0,0xE,0x0) => self.gfx = [0; W*H],
+            (0,0,0xE,0x0) => self.gfx = [[0; H]; W],
             (0,0,0xE,0xE) => { self.pc = self.stack[self.sp as usize];
                                self.sp -= 1; },
             
@@ -158,15 +158,18 @@ impl Chip8 {
                                      // zeros should not be drawn
                                      if (byte >> (7 - px)) & 1 == 0 { continue; };
                                      
-                                     // just grabs index from x and y coodinates
-                                     let pos = ((self.v[x] as usize + px) % W) + (((self.v[y] as usize + py) % H) * W);
-                                     
-                                     if self.gfx[pos] == 1 {
-                                         self.gfx[pos] = 0;
+                                     let x_coor = (px + self.v[x] as usize) % W;
+                                     let y_coor = (py + self.v[y] as usize) % H;
+                                     let pixel = &mut self.gfx[x_coor][y_coor];
+
+                                     if *pixel == 1 {
+                                         *pixel = 0;
                                          self.v[0xF] = 1;
                                      } else {
-                                         self.gfx[pos] = 1;
-                                     }}} },
+                                         *pixel = 1;
+                                         self.v[0xF] = 0;
+                                     }
+                                 }} },
             
             (0xE,_,0x9,0xE) => if self.keys[self.v[x] as usize] == 1 { self.pc += 2; },
             (0xE,_,0xA,0x1) => if self.keys[self.v[x] as usize] == 0 { self.pc += 2; },
@@ -225,7 +228,7 @@ impl Chip8 {
         self.st = 0;
         self.stack = [0; 16];
         self.sp = 0;
-        self.gfx = [0; W*H];
+        self.gfx = [[0; H]; W];
         self.draw_flag = false;
         self.keys = [0;16];
     }
