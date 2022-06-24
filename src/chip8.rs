@@ -160,15 +160,10 @@ impl Chip8 {
                                      
                                      let x_coor = (px + self.v[x] as usize) % W;
                                      let y_coor = (py + self.v[y] as usize) % H;
-                                     let pixel = &mut self.gfx[x_coor][y_coor];
+                                     let pixel = self.gfx[x_coor][y_coor];
 
-                                     if *pixel == 1 {
-                                         *pixel = 0;
-                                         self.v[0xF] = 1;
-                                     } else {
-                                         *pixel = 1;
-                                         self.v[0xF] = 0;
-                                     }
+                                     self.gfx[x_coor][y_coor] = pixel & 0;
+                                     self.v[0xF] = pixel;
                                  }} },
             
             (0xE,_,0x9,0xE) => if self.keys[self.v[x] as usize] == 1 { self.pc += 2; },
