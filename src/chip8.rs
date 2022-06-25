@@ -162,7 +162,7 @@ impl Chip8 {
                                      let y_coor = (py + self.v[y] as usize) % H;
                                      let pixel = self.gfx[x_coor][y_coor];
 
-                                     self.gfx[x_coor][y_coor] = pixel & 0;
+                                     self.gfx[x_coor][y_coor] = if pixel == 0 { 1 } else { 0 };
                                      self.v[0xF] = pixel;
                                  }} },
             
