@@ -32,10 +32,10 @@ pub struct Chip8 {
     pc: u16,
 
     // Delay timer; Will delay the next instruction from being executed for multiples of 1/60s
-    dt: u8,
+    pub dt: u8,
 
     // Sound timer; Will play a sound for multiples of 1/60s
-    st: u8,
+    pub st: u8,
 
     // Stack; Allows for 16 different subroutines at any one time
     stack: [u16; 16],
@@ -48,6 +48,9 @@ pub struct Chip8 {
 
     // The display will only be updated when this is true
     pub draw_flag: bool,
+
+    // True when waiting for a key press
+    pub waiting: bool,
 
     // Holds keyboard state; 16 keys available
     pub keys: [u8; 16],
@@ -67,6 +70,7 @@ impl Chip8 {
             sp: 0,
             gfx: [[0; H]; W],
             draw_flag: false,
+            waiting: false,
             keys: [0; 16],
         };
 
@@ -172,8 +176,8 @@ impl Chip8 {
             (0xF,_,0,7) => self.v[x] = self.dt,
             
             (0xF,_,0,0xA) => match self.keys.iter().position(|&v| v == 1) {
-                Some(i) => self.v[x] = i as u8,
-                None    => self.pc -= 2 },
+                Some(i) => { self.waiting = false; self.v[x] = i as u8; },
+                None    => self.waiting = true },
             
             (0xF,_,1,0x5) => self.dt = self.v[x],
             (0xF,_,1,0x8) => self.st = self.v[x],
@@ -188,11 +192,7 @@ impl Chip8 {
             (0xF,_,6,5) => for a in 0..=x { self.v[a] = self.memory[a + self.i as usize]; },
 
             _ => println!("Unknown opcode: 0x{:x}", self.opcode),
-        }
-
-        // These should count down at 60 times a second!!!!
-        if self.st > 0 { self.st -= 1; }
-        if self.dt > 0 { self.dt -= 1; }
+        }       
     }
 
     pub fn load_game(&mut self, game: &mut File) {

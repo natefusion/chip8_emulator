@@ -1,7 +1,7 @@
 mod chip8sdl;
 mod chip8;
 
-use std::{process, env, fs::File, time::Instant};
+use std::{process, env, fs::File, time::Instant, time::Duration};
 
 fn main() {
     let (mut file, filename) = match env::args().nth(1) {   
@@ -19,33 +19,41 @@ fn main() {
 
     my_chip8.load_game(&mut file);
 
-    let mut delay = 1; // milliseconds
+    let frame_time = Duration::from_micros(16666);
     let mut last = Instant::now();
+    let mut origin = last + frame_time / 2;
+    let tickrate = 20;
     // Emulation loop
     loop {
-        let current = Instant::now();
-        let elapsed = current - last;
-        
-        let dt = elapsed.as_millis();
+        let diff = Instant::now() - last;
+        last += diff;
 
-        if dt > delay {
-            last = current;
-            my_chip8.emulate_cycle();
-
-            if my_chip8.draw_flag {
-                my_chip8sdl.draw_frame(&my_chip8.gfx);
-                my_chip8.draw_flag = false;
+        for _ in 0..2 {
+            if origin >= last - frame_time { break; }
+            
+            for _ in 0..tickrate {
+                if my_chip8.waiting { break; }
+                
+                my_chip8.emulate_cycle();
             }
+
+            origin += frame_time;
         }
 
-        let change_delay = |sub, d: &mut u128| { if *d > 0 && sub { *d -= 1; } else if !sub { *d += 1; } println!("{}", d); };
+        if my_chip8.draw_flag {
+            my_chip8sdl.draw_frame(&my_chip8.gfx);
+            my_chip8.draw_flag = false;
+        }
+
+        if my_chip8.st > 0 { my_chip8.st -= 1; }
+        if my_chip8.dt > 0 { my_chip8.dt -= 1; }
         
         match my_chip8sdl.handle_events(&mut my_chip8.keys) {
             1 => break, // quits game
             2 => my_chip8.load_game(&mut file), // reloads game // L
-            3 => { change_delay(true, &mut delay); }, // J
-            4 => { change_delay(false, &mut delay); }, // K
             _ => {},
         }
+
+       std::thread::sleep(frame_time); 
     }
 }
