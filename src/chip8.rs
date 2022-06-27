@@ -225,6 +225,7 @@ impl Chip8 {
         self.sp = 0;
         self.gfx = [[0; H]; W];
         self.draw_flag = false;
+        self.waiting = false;
         self.keys = [0;16];
     }
 }
